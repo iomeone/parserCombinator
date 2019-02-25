@@ -1,5 +1,5 @@
 ﻿// parserCombinator.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
-//
+//  https://gist.github.com/swlaschin/485f418fede6b6a36d89#file-understanding_parser_combinators-3-fsx
 
 #include <iostream>
 
