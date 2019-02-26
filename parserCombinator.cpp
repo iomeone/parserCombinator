@@ -94,29 +94,34 @@ Parser<char, std::string> pchar(char charToMatch)
 template <typename TTokena, typename TTokenb, typename TInput>
 Parser<TTokenb, TInput>  bindP(Parser<TTokena, TInput> pa, std::function<Parser<TTokenb, TInput>(TTokena)> f )
 {
-	using TResultVal = std::pair<TTokena, TTokenb>;
 
-
-	std::function <TResult<TResultVal, TInput>(TInput)> parseFn =
+	std::function <TResult<TTokenb, TInput>(TInput)> parseFn =
 		[f, pa](TInput input)
 	{
 
 		TResult<TTokena, TInput> ret = runOnInput<TTokena, TInput>(pa, input);
 
+		TResult<TTokenb, TInput> _result  ;
+
 		ret.match(
-			[](Success<TTokena, TInput> r) {
-												TTokena v= ret.token.first;
-												TInput remaining = ret.token.second;
+			[f, &_result](Success<TTokena, TInput> r) {
+												TTokena v= r.value.first;
+												TInput remaining = r.value.second;
 												Parser<TTokenb, TInput> pb = f(v);
 												
-												TResult<TTokenb, TInput> ret = runOnInput<TTokenb, TInput>(pb, remaining);
-												return ret;
+												TResult<TTokenb, TInput> result = runOnInput<TTokenb, TInput>(pb, remaining);
+												_result = result;
 										  },
 				
 
-			[](Error e) { return TResult <TTokenb, TInput>(Error{ e }); }
+			[&_result](Error e) { _result =( TResult <TTokenb, TInput>(Error{ e })); }
 		);
+
+		return _result;
+		
 	};
+
+	//std::function <TResult<TTokenb, TInput>(TInput)> parseFn = nullptr;
 	Parser<TTokenb, TInput> pb{ parseFn };
 	return pb;
 
@@ -142,13 +147,25 @@ Parser<TToken, TInput> returnP(TToken v)
 template <typename TTokena, typename TTokenb, typename TInput>
 Parser<std::pair<TTokena, TTokenb>, TInput>  andThen( Parser<TTokena, TInput> pa, Parser<TTokenb, TInput> pb)
 {
-	return bindP(pa, [pb](TTokena paResult)->std::function<TResult<std::pair<TTokena, TTokenb>, TInput>(TTokena)>
-			{
-				bindP(pb, [paResult](TTokenb pbResult) -> std::function<TResult<std::pair<TTokena, TTokenb>, TInput>(TTokenb)>
-				{
-					returnP<std::pair<TTokena, TTokenb>, TInput>(std::make_pair<paResult, pbResult>);
 
-				});
+	using TPair = std::pair<TTokena, TTokenb>;
+
+	//TTokena a;
+	//TTokenb b;
+	//auto x = returnP<TPair, TInput>(std::make_pair(a, b));
+	//return x;
+	return bindP<TTokena, TPair, TInput>(pa, [pb](TTokena paResult)->Parser<TPair, TInput>
+			{
+				//TTokena a;
+				//TTokenb b;
+				//auto x =  returnP<TPair, TInput>(std::make_pair(a, b));
+				//return x;
+				//return returnP<std::pair<TTokena, TTokenb>, TInput>(std::make_pair(paResult, b));
+
+				return bindP<TTokenb, TPair, TInput>(pb, [paResult](TTokenb pbResult) -> Parser<TPair, TInput>
+						{
+							return returnP<std::pair<TTokena, TTokenb>, TInput>(std::make_pair(paResult, pbResult));
+						});
 			});
 }
 
@@ -160,17 +177,18 @@ int main()
  
 	Parser<char, std::string> pa = pchar('b');
 	Parser<char, std::string> pb = pchar('a');
-	TResult<char, std::string> r1 = runOnInput<char, std::string>(pa, "baa");
-	r1.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << " "; },
-			  [](Error e) { std::cout << e.error << " "; });
+	//TResult<char, std::string> r1 = runOnInput<char, std::string>(pa, "baa");
+	//r1.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << " "; },
+	//		  [](Error e) { std::cout << e.error << " "; });
 
 
+	using TPairToken = std::pair<char, char>;
 	Parser< std::pair<char, char> , std::string> pab = andThen<char, char, std::string>(pa, pb);
 
-	//TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(pab, "aba");
+	TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(pab, "baa");
 
-	//r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << " "; },
-	//	[](Error e) { std::cout << e.error << " "; });
+	r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << " "; },
+		[](Error e) { std::cout << e.error << " "; });
 
 
 
