@@ -2,11 +2,13 @@
 //  https://gist.github.com/swlaschin/485f418fede6b6a36d89#file-understanding_parser_combinators-3-fsx
 
 #include <iostream>
-
 #include <sstream>
-#include <mapbox/variant.hpp>
-#include <stdexcept>
 
+#include <mapbox/variant.hpp>
+
+#include <list>
+#include <numeric>
+#include <vector>
 
 using ParserLabel = std::string;
 using ParserError = std::string;
@@ -200,6 +202,45 @@ Parser<TToken, TInput> orElse(Parser<TToken, TInput> p1, Parser<TToken, TInput> 
 	return pr;
 }
 
+template <typename Func, typename Container>
+auto myreduce(Func f, Container &container)
+-> decltype(Container::value_type())
+{
+	typedef typename Container::value_type ReturnType;
+	ReturnType result = ReturnType();
+	if (container.begin() != container.end())
+	{
+		typename Container::const_iterator it;
+		it = container.begin();
+		for (result = *(it++); it != container.end(); ++it)
+		{
+			result = f(result, *it);
+		}
+	}
+	return result;
+}
+
+template <typename TToken, typename TInput>
+Parser<TToken, TInput> choice(std::list <Parser<TToken, TInput>> parserList)
+{
+	//myreduce(orElse<TToken, TInput>, parserList)
+	Parser<TToken, TInput> result = *parserList.begin();;
+	if (parserList.begin() != parserList.end())
+	{
+		
+		std::list<Parser<TToken, TInput>>::iterator it = parserList.begin();
+		it++;
+	
+		for ( ;it != parserList.end(); ++it)
+		{
+			result = orElse(result, *it);
+		}
+	}
+	return result;
+
+}
+
+
 int main()
 {
  
@@ -211,15 +252,21 @@ int main()
 
 
 	using TPairToken = std::pair<char, char>;
-	TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(andThen(pchar('a'), pchar('b')), "aaabb");
+	TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(andThen(pchar('a'), pchar('b')), "ababb");
 	r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
 		[](Error e) { std::cout << e.error << std::endl; });
 
 
 
 	
-	TResult<char, std::string> r3 = runOnInput<char, std::string>(orElse(pchar('a'), pchar('b')), "cz");
+	TResult<char, std::string> r3 = runOnInput<char, std::string>(orElse(pchar('a'), pchar('b')), "az");
 	r3.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+		[](Error e) { std::cout << e.error << std::endl; });
+
+
+	std::list < Parser<char, std::string> >l = {pchar('a'), pchar('b'), pchar('c') , pchar('z') };
+	TResult<char, std::string> r4 = runOnInput<char, std::string>(choice(l), "zz");
+	r4.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
 		[](Error e) { std::cout << e.error << " "; });
 
 
