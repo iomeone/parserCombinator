@@ -2,7 +2,7 @@
 //  https://gist.github.com/swlaschin/485f418fede6b6a36d89#file-understanding_parser_combinators-3-fsx
 
 #include <iostream>
-
+#include <sstream>
 #include <mapbox/variant.hpp>
 #include <stdexcept>
 
@@ -40,9 +40,7 @@ template <typename TToken, typename TInput>
 struct Parser
 {
 	//Parser(std::function<TResult<TToken> (TInput)> p) : parseFn(std::move(p))
-	Parser(std::function<TResult<TToken>(TInput)> p) : parseFn(p)
-	{
-	}
+	Parser(std::function<TResult<TToken>(TInput)> p) : parseFn(p){}
 
 	std::function<TResult<TToken>(TInput)> parseFn;
 	//ParserLabel label;
@@ -75,11 +73,18 @@ Parser<TPcharReturn, std::string> pchar(char charToMatch)
 					std::string remaining = strinput.substr(1, strinput.length() - 1);
 					return TResult <TPcharReturn> (Success<TPcharReturn>{ std::make_pair(first, remaining) });
 				}
+				else
+				{
+					std::stringstream s; 
+					s << "Expecting \'" << charToMatch <<"\'. Got" << "\'"<< first <<"\' ";
+					std::string r = s.str();
+					return TResult <TPcharReturn>(Error{  r });
+					 
+				}
+					
 			}
-			
 		};
-
-	return Parser<std::pair<char, std::string>, std::string>(parseFn );
+	return Parser<TPcharReturn, std::string>(parseFn );
 }
 
 
@@ -87,11 +92,11 @@ Parser<TPcharReturn, std::string> pchar(char charToMatch)
 
 int main()
 {
-	Parser<std::pair<char, std::string>, std::string> p = pchar('a');
+	Parser<TPcharReturn, std::string> p = pchar('a');
 
-	TResult<std::pair<char, std::string>> ret = runOnInput<std::pair<char, std::string>, std::string>(p, "aaa");
+	TResult<TPcharReturn> ret = runOnInput<TPcharReturn, std::string>(p, "baa");
 
-	ret.match([](Success<std::pair<char, std::string>> r) { std::cout << "(" << r.token.first << ", " << r.token.second << ")" << " "; },
+	ret.match([](Success<TPcharReturn> r) { std::cout << "(" << r.token.first << ", " << r.token.second << ")" << " "; },
 			  [](Error e) { std::cout << e.error << " "; });
 
 
