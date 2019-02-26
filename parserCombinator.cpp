@@ -174,20 +174,16 @@ Parser<std::pair<TTokena, TTokenb>, TInput>  andThen( Parser<TTokena, TInput> pa
 int main()
 {
  
- 
-	Parser<char, std::string> pa = pchar('b');
-	Parser<char, std::string> pb = pchar('a');
-	//TResult<char, std::string> r1 = runOnInput<char, std::string>(pa, "baa");
-	//r1.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << " "; },
-	//		  [](Error e) { std::cout << e.error << " "; });
+	TResult<char, std::string> r1 = runOnInput<char, std::string>(pchar('b'), "baaaa");
+	r1.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+			  [](Error e) { std::cout << e.error << " "; });
+
+
 
 
 	using TPairToken = std::pair<char, char>;
-	Parser< std::pair<char, char> , std::string> pab = andThen<char, char, std::string>(pa, pb);
-
-	TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(pab, "baa");
-
-	r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << " "; },
+	TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(andThen(pchar('a'), pchar('b')), "aaaabb");
+	r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
 		[](Error e) { std::cout << e.error << " "; });
 
 
