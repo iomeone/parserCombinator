@@ -3,7 +3,6 @@
 
 #include <iostream>
 
-
 #include <mapbox/variant.hpp>
 #include <stdexcept>
 
@@ -13,13 +12,13 @@ using ParserPosition = std::string;
 
 template <typename T>
 struct Success{
-	T a;
+	T token;
 };
 
 struct Error {
-	 ParserLabel l;
-	 ParserError e;
-	 ParserPosition p;
+	 //ParserLabel l;
+	 ParserError error;
+	 //ParserPosition p;
 };
 
 
@@ -28,7 +27,7 @@ struct Error {
 //	| Failure of ParserLabel * ParserError * ParserPosition
 
 template <typename T>
-using Result = mapbox::util::variant<Error, Success<T>>;
+using TResult = mapbox::util::variant<Error, Success<T>>;
 
 
 
@@ -37,12 +36,16 @@ using Result = mapbox::util::variant<Error, Success<T>>;
 //		label:  ParserLabel
 //	}
 
-template <typename TResult, typename TInput>
-
+template <typename TToken, typename TInput>
 struct Parser
 {
-	std::function<std::pair<TResult, TInput>(TInput)> parseFn;
-	ParserLabel label;
+	//Parser(std::function<TResult<TToken> (TInput)> p) : parseFn(std::move(p))
+	Parser(std::function<TResult<TToken>(TInput)> p) : parseFn(p)
+	{
+	}
+
+	std::function<TResult<TToken>(TInput)> parseFn;
+	//ParserLabel label;
 };
 
 
@@ -50,20 +53,57 @@ struct Parser
 //// call inner function with input
 //parser.parseFn input
 
-template <typename TResult, typename TInput>
-TResult runOnInput(Parser<TResult, TInput> parser, TInput t)
+template <typename TToken, typename TInput>
+TResult<TToken> runOnInput(Parser<TToken, TInput> parser, TInput t)
 {
 	return parser.parseFn(t);
 }
 
 
+Parser<std::pair<char, std::string>, std::string> pchar(char charToMatch)
+{
+	std::function <TResult<std::pair<char, std::string>>(std::string)> parseFn =
+		[charToMatch](std::string strinput)
+		{  
+		if (strinput.empty())
+		{
+			TResult <std::pair<char, std::string>> res;
+			res =Error{ "no more input" };
+			return res;
+		}
+		else
+		{
+			char first = strinput.at(0);
+			if (charToMatch == first)
+			{
+				std::string remaining = strinput.substr(1, strinput.length() - 1);
+				TResult <std::pair<char, std::string>> res;
+				res = Success<std::pair<char, std::string>>{ std::make_pair(first, remaining) };
+				return res;
+			}
+		}
+			
+		};
+
+	return Parser<std::pair<char, std::string>, std::string>(parseFn );
+	
+}
+
+
+
+
 int main()
 {
+	Parser<std::pair<char, std::string>, std::string> p = pchar('a');
+
+	TResult<std::pair<char, std::string>> ret = runOnInput<std::pair<char, std::string>, std::string>(p, "aaa");
+
+	ret.match([](Success<std::pair<char, std::string>> r) { std::cout << "(" << r.token.first << ", " << r.token.second << ")" << " "; },
+			  [](Error e) { std::cout << e.error << " "; });
 
 
-
-
-    std::cout << "Hello World!\n"; 
+	getchar();
+ 
 	return 0;
 }
 
