@@ -59,34 +59,27 @@ TResult<TToken> runOnInput(Parser<TToken, TInput> parser, TInput t)
 	return parser.parseFn(t);
 }
 
-
-Parser<std::pair<char, std::string>, std::string> pchar(char charToMatch)
+using TPcharReturn = std::pair<char, std::string>;
+Parser<TPcharReturn, std::string> pchar(char charToMatch)
 {
-	std::function <TResult<std::pair<char, std::string>>(std::string)> parseFn =
+	std::function <TResult<TPcharReturn>(std::string)> parseFn =
 		[charToMatch](std::string strinput)
 		{  
-		if (strinput.empty())
-		{
-			TResult <std::pair<char, std::string>> res;
-			res =Error{ "no more input" };
-			return res;
-		}
-		else
-		{
-			char first = strinput.at(0);
-			if (charToMatch == first)
+			if (strinput.empty())
+				return TResult <TPcharReturn>(Error{ "no more input" });
+			else
 			{
-				std::string remaining = strinput.substr(1, strinput.length() - 1);
-				TResult <std::pair<char, std::string>> res;
-				res = Success<std::pair<char, std::string>>{ std::make_pair(first, remaining) };
-				return res;
+				char first = strinput.at(0);
+				if (charToMatch == first)
+				{
+					std::string remaining = strinput.substr(1, strinput.length() - 1);
+					return TResult <TPcharReturn> (Success<TPcharReturn>{ std::make_pair(first, remaining) });
+				}
 			}
-		}
 			
 		};
 
 	return Parser<std::pair<char, std::string>, std::string>(parseFn );
-	
 }
 
 
