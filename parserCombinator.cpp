@@ -126,10 +126,10 @@ template<typename TToken, typename TInput>
 Parser<TToken, TInput> returnP(TToken v)
 {
 
-	std::function <TResult<TToken, TToken>(TInput)> fn =
+	std::function <TResult<TToken, TInput>(TInput)> fn =
 		[v](TInput input)
 	{
-		return TResult <TToken>(Success<TToken, TInput>{ std::make_pair(v, input) });
+		return TResult <TToken, TInput>(Success<TToken, TInput>{ std::make_pair(v, input) });
 	};
 
 	Parser<TToken, TInput> pr{ fn };
