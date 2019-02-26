@@ -131,34 +131,31 @@ Parser<TToken, TInput> returnP(TToken v)
 	{
 		return TResult <TToken>(Success<TToken, TInput>{ std::make_pair(v, input) });
 	};
+
+	Parser<TToken, TInput> pr{ fn };
+
+	return pr;
 }
 
 
 
 template <typename TTokena, typename TTokenb, typename TInput>
-Parser<std::pair<TTokena, TTokenb>, TInput>  andThen( Parser<TTokena, TInput> pa, Parser<TTokena, TInput> pb)
+Parser<std::pair<TTokena, TTokenb>, TInput>  andThen( Parser<TTokena, TInput> pa, Parser<TTokenb, TInput> pb)
 {
 
 	using TResultValAB = std::pair<TTokena, TTokenb>;
 
-	bindP(pa, [](TTokena paResult)->std::function<TResult<TTokena, TInput>(TTokena)>
+	bindP(pa, [pb](TTokena paResult)->std::function<TResult<TResultValAB, TInput>(TTokena)>
 	{
 		bindP(pb, [paResult](TTokenb pbResult) -> std::function<TResult<TResultValAB, TInput>(TTokenb)>
 		{
-			returnP(std::make_pair<paResult, pbResult>);
+			returnP<TResultValAB, TInput>(std::make_pair<paResult, pbResult>);
 
 		});
 	});
 }
 
 
-template <typename TToken1, typename TToken2, typename TInput>
-Parser<std::pair<TToken1, TToken2>, TInput> andThen(Parser<TToken1, TInput> p1, Parser<TToken2, TInput> p2)
-{
-
-
-	return andThen(p1, p2); // result type is  Parser<std::pair<TToken1, TToken2>, TInput> 
- }
 
 int main()
 {
@@ -172,9 +169,7 @@ int main()
 
 
 	using TPairToken = std::pair<char, char>;
-
-
-	Parser<TPairToken, std::string> pab = andThen(pa, pb);
+	Parser<TPairToken, std::string> pab = andThen<char, char, std::string>(pa, pb);
 
 	TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(pab, "aba");
 
