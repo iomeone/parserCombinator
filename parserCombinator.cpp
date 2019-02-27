@@ -10,6 +10,19 @@
 #include <numeric>
 #include <vector>
 
+#include <algorithm>
+
+
+// common utility function
+
+template<class F, class G> auto comp(F f, G g) {
+	return [f, g](auto &&... args) {
+		return f(g(std::forward<decltype(args)>(args)...));
+	};
+}
+
+
+
 using ParserLabel = std::string;
 using ParserError = std::string;
 using ParserPosition = std::string;
@@ -94,7 +107,7 @@ Parser<char, std::string> pchar(char charToMatch)
 }
 
 template <typename TTokena, typename TTokenb, typename TInput>
-Parser<TTokenb, TInput>  bindP(Parser<TTokena, TInput> pa, std::function<Parser<TTokenb, TInput>(TTokena)> f )
+Parser<TTokenb, TInput>  bindM(Parser<TTokena, TInput> pa, std::function<Parser<TTokenb, TInput>(TTokena)> f )
 {
 
 	std::function <TResult<TTokenb, TInput>(TInput)> parseFn =
@@ -130,7 +143,7 @@ Parser<TTokenb, TInput>  bindP(Parser<TTokena, TInput> pa, std::function<Parser<
 }
 
 template<typename TToken, typename TInput>
-Parser<TToken, TInput> returnP(TToken v)
+Parser<TToken, TInput> returnM(TToken v)
 {
 
 	std::function <TResult<TToken, TInput>(TInput)> fn =
@@ -156,7 +169,7 @@ Parser<std::pair<TTokena, TTokenb>, TInput>  andThen( Parser<TTokena, TInput> pa
 	//TTokenb b;
 	//auto x = returnP<TPair, TInput>(std::make_pair(a, b));
 	//return x;
-	return bindP<TTokena, TPair, TInput>(pa, [pb](TTokena paResult)->Parser<TPair, TInput>
+	return bindM<TTokena, TPair, TInput>(pa, [pb](TTokena paResult)->Parser<TPair, TInput>
 			{
 				//TTokena a;
 				//TTokenb b;
@@ -164,9 +177,9 @@ Parser<std::pair<TTokena, TTokenb>, TInput>  andThen( Parser<TTokena, TInput> pa
 				//return x;
 				//return returnP<std::pair<TTokena, TTokenb>, TInput>(std::make_pair(paResult, b));
 
-				return bindP<TTokenb, TPair, TInput>(pb, [paResult](TTokenb pbResult) -> Parser<TPair, TInput>
+				return bindM<TTokenb, TPair, TInput>(pb, [paResult](TTokenb pbResult) -> Parser<TPair, TInput>
 						{
-							return returnP<std::pair<TTokena, TTokenb>, TInput>(std::make_pair(paResult, pbResult));
+							return returnM<std::pair<TTokena, TTokenb>, TInput>(std::make_pair(paResult, pbResult));
 						});
 			});
 }
@@ -202,23 +215,6 @@ Parser<TToken, TInput> orElse(Parser<TToken, TInput> p1, Parser<TToken, TInput> 
 	return pr;
 }
 
-template <typename Func, typename Container>
-auto myreduce(Func f, Container &container)
--> decltype(Container::value_type())
-{
-	typedef typename Container::value_type ReturnType;
-	ReturnType result = ReturnType();
-	if (container.begin() != container.end())
-	{
-		typename Container::const_iterator it;
-		it = container.begin();
-		for (result = *(it++); it != container.end(); ++it)
-		{
-			result = f(result, *it);
-		}
-	}
-	return result;
-}
 
 template <typename TToken, typename TInput>
 Parser<TToken, TInput> choice(std::list <Parser<TToken, TInput>> parserList)
@@ -226,6 +222,21 @@ Parser<TToken, TInput> choice(std::list <Parser<TToken, TInput>> parserList)
 	return std::accumulate(std::next(parserList.begin()), parserList.end(),
 							*parserList.begin(), 
 							orElse<TToken, TInput>);
+}
+
+
+template <typename TToken, typename TInput>
+Parser<char, TInput> anyOf(std::list<char> chlst)
+{
+	choice (std::transform(chlst.begin(), chlst.end(), pchar<TToken, TInput>) );
+}
+
+
+
+template<typename  TTokena, typename TTokenb, typename TInput>
+Parser<TTokenb, TInput> mapM(Parser<TTokena, TInput> pa, std::function<TTokenb(TTokena)> f)
+{
+	return bindM<TTokena, TTokenb, TInput>(pa, (comp(returnM<TTokenb, TInput>, f)));
 }
 
 
@@ -253,10 +264,16 @@ int main()
 
 
 	std::list < Parser<char, std::string> >l = {pchar('a'), pchar('b'), pchar('c') , pchar('z') };
+
+	Parser<char, std::string> ll = choice(l);
+	ll = mapM(ll, std::function<char(char)>(toupper));
 	TResult<char, std::string> r4 = runOnInput<char, std::string>(choice(l), "dazz");
 	r4.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-		[](Error e) { std::cout << e.error << " "; });
+		[](Error e) { std::cout << e.error << std::endl; });
 
+
+
+	std::cout << (char)toupper('a') << std::endl;;
 
 	getchar();
  
