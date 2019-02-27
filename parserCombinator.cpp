@@ -173,6 +173,21 @@ Parser<std::pair<TTokena, TTokenb>, TInput>  andThen(Parser<TTokena, TInput> pa,
 }
 
 
+template<typename TFuna, typename TFunb,  typename TInput>
+Parser<TFunb, TInput> applyM(Parser < std::function<TFunb(TFuna)>, TInput> pf, Parser<TFuna, TInput> pa)
+{
+	using TFUN = std::function <TFunb(TFuna)>;
+
+	return bindM<TFUN, TFunb,TInput>(pf, [pa](TFUN f)->Parser<TFunb, TInput>
+		   {
+				return bindM<TFuna, TFunb, TInput>(pa, [f](TFuna a)->Parser<TFunb, TInput>
+				{
+					return returnM<TFunb, TInput>(f(a));
+				});
+			});
+
+}
+
 template <typename TToken, typename TInput>
 Parser<TToken, TInput> orElse(Parser<TToken, TInput> p1, Parser<TToken, TInput> p2)
 {
@@ -288,7 +303,7 @@ int main()
 		[](Error e) { std::cout << e.error << std::endl; }
 	);
 
-
+	//test parseThreeDigitAsStr
 	Parser<std::string, std::string> parseThreeDigitAsStr = mapM<ThreePair, std::string, std::string>(parseThreeDigit, 
 			[](ThreePair x) -> std::string
 				{
@@ -301,6 +316,26 @@ int main()
 	TResult<std::string, std::string> r8 = runOnInput<std::string, std::string>(parseThreeDigitAsStr, "199876azz");
 	r8.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
 		[](Error e) { std::cout << e.error << std::endl; });
+
+
+
+
+
+	//test applyM
+	std::function< std::string (ThreePair)> af = [](ThreePair x) -> std::string
+				{
+					std::stringstream s;
+					s << x.first.first << x.first.second << x.second;
+					std::string r = s.str();
+					return r;
+	};
+	using TFUN = std::function< std::string(ThreePair)>;
+	Parser<std::string, std::string> ap = applyM<ThreePair, std::string>(returnM<TFUN, std::string>(af), parseThreeDigit);
+
+	TResult<std::string, std::string> r9 = runOnInput<std::string, std::string>(ap, "199876azz");
+	r9.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+		[](Error e) { std::cout << e.error << std::endl; });
+
 
 
 
