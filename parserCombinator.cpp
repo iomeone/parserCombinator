@@ -160,21 +160,10 @@ Parser<TToken, TInput> returnM(TToken v)
 template <typename TTokena, typename TTokenb, typename TInput>
 Parser<std::pair<TTokena, TTokenb>, TInput>  andThen( Parser<TTokena, TInput> pa, Parser<TTokenb, TInput> pb)
 {
-
 	using TPair = std::pair<TTokena, TTokenb>;
 
-	//TTokena a;
-	//TTokenb b;
-	//auto x = returnP<TPair, TInput>(std::make_pair(a, b));
-	//return x;
 	return bindM<TTokena, TPair, TInput>(pa, [pb](TTokena paResult)->Parser<TPair, TInput>
 			{
-				//TTokena a;
-				//TTokenb b;
-				//auto x =  returnP<TPair, TInput>(std::make_pair(a, b));
-				//return x;
-				//return returnP<std::pair<TTokena, TTokenb>, TInput>(std::make_pair(paResult, b));
-
 				return bindM<TTokenb, TPair, TInput>(pb, [paResult](TTokenb pbResult) -> Parser<TPair, TInput>
 						{
 							return returnM<std::pair<TTokena, TTokenb>, TInput>(std::make_pair(paResult, pbResult));
