@@ -188,6 +188,29 @@ Parser<TFunb, TInput> applyM(Parser < std::function<TFunb(TFuna)>, TInput> pf, P
 
 }
 
+
+template<typename Ta, typename Tb, typename Tc, typename Ti> 
+Parser<Tc, Ti> lift2(std::function<Tc(Ta, Tb)> f, Parser<Ta, Ti> xp, Parser<Tb, Ti> yp)
+{
+	using TCurried2 = std::function<std::function<Tc(Tb)>(Ta)>;
+	TCurried2 curriedf = [f](Ta a)->std::function<Tc(Tb)>
+	{
+		return [f, a](Tb b)->Tc
+				 { 
+					return f(a, b);
+				 };
+
+	};
+
+	Parser<TCurried2, Ti> x = returnM<TCurried2, Ti>(curriedf);
+
+	Parser< std::function <Tc(Tb)>, Ti> p2 = applyM<Ta, std::function <Tc(Tb)>, Ti>(x, xp);
+
+	return applyM<Tb, Tc, Ti>(p2, yp);
+}
+
+
+
 template <typename TToken, typename TInput>
 Parser<TToken, TInput> orElse(Parser<TToken, TInput> p1, Parser<TToken, TInput> p2)
 {
@@ -337,6 +360,21 @@ int main()
 		[](Error e) { std::cout << e.error << std::endl; });
 
 
+
+
+	//test lift2
+	std::function< std::string(char a, char b)> al = [](char a, char b) -> std::string
+	{
+		std::stringstream s;
+		s << a << b ;
+		std::string r = s.str();
+		return r;
+	};
+	 Parser<std::string, std::string> pParse2char2string = lift2<char, char, std::string>(al, pchar('n'), pchar('b'));
+
+	 TResult<std::string, std::string> r10 = runOnInput<std::string, std::string>(pParse2char2string, "nbgaxbzz");
+	 r10.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+		 [](Error e) { std::cout << e.error << std::endl; });
 
 
 	getchar();
