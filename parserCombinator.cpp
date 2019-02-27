@@ -223,21 +223,9 @@ auto myreduce(Func f, Container &container)
 template <typename TToken, typename TInput>
 Parser<TToken, TInput> choice(std::list <Parser<TToken, TInput>> parserList)
 {
-	//myreduce(orElse<TToken, TInput>, parserList)
-	Parser<TToken, TInput> result = *parserList.begin();;
-	if (parserList.begin() != parserList.end())
-	{
-		
-		std::list<Parser<TToken, TInput>>::iterator it = parserList.begin();
-		it++;
-	
-		for ( ;it != parserList.end(); ++it)
-		{
-			result = orElse(result, *it);
-		}
-	}
-	return result;
-
+	return std::accumulate(std::next(parserList.begin()), parserList.end(),
+							*parserList.begin(), 
+							orElse<TToken, TInput>);
 }
 
 
@@ -265,7 +253,7 @@ int main()
 
 
 	std::list < Parser<char, std::string> >l = {pchar('a'), pchar('b'), pchar('c') , pchar('z') };
-	TResult<char, std::string> r4 = runOnInput<char, std::string>(choice(l), "zz");
+	TResult<char, std::string> r4 = runOnInput<char, std::string>(choice(l), "dazz");
 	r4.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
 		[](Error e) { std::cout << e.error << " "; });
 
