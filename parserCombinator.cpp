@@ -21,6 +21,7 @@ decltype(auto) comp(F&& f, G&& g)
 }
 
 
+
 using ParserLabel = std::string;
 using ParserError = std::string;
 using ParserPosition = std::string;
@@ -277,13 +278,31 @@ int main()
 
 
 	std::cout << "parse Three Digit" << std::endl;
-	auto parseThreeDigit = andThen(andThen(parseDigit, parseDigit), parseDigit);
+	using ThreePair = std::pair < std::pair<char, char>, char>;
+
+	Parser<ThreePair, std::string> parseThreeDigit = andThen(andThen(parseDigit, parseDigit), parseDigit);
 	using ThreePair = std::pair < std::pair<char, char>, char>;
 	TResult<ThreePair, std::string> r7 = runOnInput<ThreePair, std::string>(parseThreeDigit, "123azz");
 	r7.match(
 		[](Success<ThreePair, std::string> r) { std::cout << "(" << "(" << r.value.first.first.first << ", " << r.value.first.first.second << ")" << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
 		[](Error e) { std::cout << e.error << std::endl; }
 	);
+
+
+	Parser<std::string, std::string> parseThreeDigitAsStr = mapM<ThreePair, std::string, std::string>(parseThreeDigit, 
+			[](ThreePair x) -> std::string
+				{
+					std::stringstream s;
+					s << x.first.first << x.first.second << x.second;
+					std::string r = s.str();
+					return r;
+				});
+
+	TResult<std::string, std::string> r8 = runOnInput<std::string, std::string>(parseThreeDigitAsStr, "199876azz");
+	r8.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+		[](Error e) { std::cout << e.error << std::endl; });
+
+
 
 	getchar();
 
