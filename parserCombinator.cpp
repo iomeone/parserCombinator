@@ -20,6 +20,14 @@ decltype(auto) comp(F&& f, G&& g)
 	return [=](auto x) { return f(g(x)); };
 }
 
+template<typename Function, typename... Arguments>
+auto curry(Function function, Arguments... args) {
+	return [=](auto... rest) {
+		return function(args..., rest...);
+	}
+}
+
+
 
 
 using ParserLabel = std::string;
@@ -193,6 +201,7 @@ template<typename Ta, typename Tb, typename Tc, typename Ti>
 Parser<Tc, Ti> lift2(std::function<Tc(Ta, Tb)> f, Parser<Ta, Ti> xp, Parser<Tb, Ti> yp)
 {
 	using TCurried2 = std::function<std::function<Tc(Tb)>(Ta)>;
+
 	TCurried2 curriedf = [f](Ta a)->std::function<Tc(Tb)>
 	{
 		return [f, a](Tb b)->Tc
@@ -268,6 +277,53 @@ template<typename  TTokena, typename TTokenb, typename TInput>
 Parser<TTokenb, TInput> mapM(Parser<TTokena, TInput> pa, std::function<TTokenb(TTokena)> f)
 {
 	return bindM<TTokena, TTokenb, TInput>(pa, (comp(returnM<TTokenb, TInput>, f)));
+}
+
+
+//Parser<Tc, Ti> lift2(std::function<Tc(Ta, Tb)> f, Parser<Ta, Ti> xp, Parser<Tb, Ti> yp)
+
+template<typename Ta, typename Tb, typename Tc, typename Ti>
+std::function< Parser<Tc, Ti>(Parser<Ta, Ti>, Parser<Tb, Ti>)> curriedLift2(std::function<Tc(Ta, Tb)> f)            /*Parser<Ta, Ti> xp, Parser<Tb, Ti> yp*/
+{
+	std::function< Parser<Tc, Ti>(Parser<Ta, Ti>, Parser<Tb, Ti>)> res = [f](Parser<Ta, Ti> xp, Parser<Tb, Ti> yp)-> Parser<Tc, Ti>
+	{
+		return lift2<Ta, Tb, Tc, Ti>(f, xp, yp);
+	};
+	return res;
+	
+}
+
+
+template<typename TItem, typename Ti>
+Parser<std::list<TItem>, Ti> sequence(std::list<Parser<TItem, Ti>> lstParser)
+{
+	std::function<std::list<TItem>(TItem, std::list<TItem>)> cons = [](TItem a, std::list<TItem> lst)->std::list<TItem>
+	{
+		 lst.push_front(a);
+		 return lst;
+	};
+
+	//Parser<Tc, Ti> lift2(std::function<Tc(Ta, Tb)> f, Parser<Ta, Ti> xp, Parser<Tb, Ti> yp)
+	//auto curryLift2 = curry (lift2);
+	std::function< Parser<std::list<TItem>, Ti>(Parser<TItem, Ti>, Parser<std::list<TItem>, Ti>)>  curriedCons = curriedLift2<TItem, std::list<TItem>, std::list<TItem>, Ti>(cons);
+
+	
+	//std::function< Parser<TItem, Ti> (Parser<TItem, Ti>, Parser<TItem, Ti>) curryCons = curriedLift2<TItem, std::list<TItem>, std::list<TItem>, Ti>(cons);
+
+
+	//auto consP =lift2(cons);
+
+	std::list<TItem> emptylst = {};
+	Parser<std::list<TItem>, Ti> res{ returnM<std::list<TItem>, Ti>(emptylst) };
+	
+
+	for (auto it = lstParser.rbegin(); it != lstParser.rend(); ++it)
+	{
+		res = curriedCons(*it, res);
+	}
+
+
+	return res;
 }
 
 
@@ -377,7 +433,27 @@ int main()
 		 [](Error e) { std::cout << e.error << std::endl; });
 
 
-	getchar();
+
+
+	 //test
+	 std::list<Parser<char, std::string>> parsers = std::list<Parser<char, std::string>>{ pchar('a'), pchar('b'), pchar('c') };
+
+	 Parser<std::list<char>, std::string> combined = sequence<char, std::string>(parsers);
+
+
+	 TResult<std::list<char>, std::string> r11 = runOnInput<std::list<char>, std::string>(combined, "abc1azz");
+	 r11.match(
+		 
+		 [](Success<std::list<char>, std::string> r) { std::cout << "(";
+													  std::transform(r.value.first.begin(), r.value.first.end(), r.value.first.begin(),
+														  [](char c) -> char {  std::cout << c << ","; return c; });
+													   std::cout << ", " << r.value.second << ")" << std::endl; },
+		 
+		 [](Error e) { std::cout << e.error << std::endl; });
+	 
+
+
+	 getchar();
 
 	return 0;
 }
