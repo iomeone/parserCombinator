@@ -14,13 +14,11 @@
 
 
 // common utility function
-
-template<class F, class G> auto comp(F f, G g) {
-	return [f, g](auto &&... args) {
-		return f(g(std::forward<decltype(args)>(args)...));
-	};
+template <class F, class G>
+decltype(auto) comp(F&& f, G&& g)
+{
+	return [=](auto x) { return f(g(x)); };
 }
-
 
 
 using ParserLabel = std::string;
@@ -266,14 +264,17 @@ int main()
 	std::list < Parser<char, std::string> >l = {pchar('a'), pchar('b'), pchar('c') , pchar('z') };
 
 	Parser<char, std::string> ll = choice(l);
-	ll = mapM(ll, std::function<char(char)>(toupper));
-	TResult<char, std::string> r4 = runOnInput<char, std::string>(choice(l), "dazz");
+	TResult<char, std::string> r4 = runOnInput<char, std::string>(choice(l), "azz");
 	r4.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
 		[](Error e) { std::cout << e.error << std::endl; });
 
 
+	Parser<int, std::string> lm = mapM<char, int, std::string>(ll, std::function<int(char)>(toupper));
+	TResult<int, std::string> r5 = runOnInput<int, std::string>(lm, "azz");
+	r5.match([](Success<int, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+		[](Error e) { std::cout << e.error << std::endl; });
 
-	std::cout << (char)toupper('a') << std::endl;;
+
 
 	getchar();
  
