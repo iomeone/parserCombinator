@@ -388,7 +388,7 @@ TResult<std::list<TItem>, Ti> parserZeroOrMore(Parser<TItem, Ti> parser, Ti inpu
 
 
 template<typename TItem, typename Ti>
-Parser<std::list<TItem>, Ti> manyx(Parser<TItem, Ti> parser)
+Parser<std::list<TItem>, Ti> many(Parser<TItem, Ti> parser)
 {
 	std::function < TResult<std::list<TItem>, Ti>(Ti)> innerFn = [parser](Ti input)->TResult<std::list<TItem>, Ti>
 	{
@@ -551,8 +551,8 @@ int main()
 	 {
 		 std::cout << "test many" << std::endl;
 
-		 auto p = manyx(pchar('A'));
-		 TResult< std::list<char>, std::string> ret = runOnInput< std::list<char>, std::string>(p, "|AAAD");
+		 auto manyA = many(pchar('A'));
+		 TResult< std::list<char>, std::string> ret = runOnInput< std::list<char>, std::string>(manyA, "AAAAD");
 		 ret.match(
 			 [](Success<std::list<char>, std::string> r) { std::cout << "(";
 			 
@@ -566,7 +566,22 @@ int main()
 
 
 
+	 {
 
+		 std::cout << "test manyAb" << std::endl;
+
+		 auto manyAb = many<std::string, std::string>(pstring<std::string>("AB"));
+		 TResult< std::list<std::string>, std::string> ret = runOnInput< std::list<std::string>, std::string>(manyAb, "ABABAAAD");
+		 ret.match(
+			 [](Success<std::list<std::string>, std::string> r) { std::cout << "(";
+
+		 std::ostream_iterator<std::string> out_it(std::cout, " ");
+		 std::transform(r.value.first.begin(), r.value.first.end(), out_it, [](std::string c)->std::string {   return c; });
+
+		 std::cout << ", " << r.value.second << ")" << std::endl; },
+			 [](Error e) { std::cout << e.error << " "; });
+
+	 }
 
 
 
