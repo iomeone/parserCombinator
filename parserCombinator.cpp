@@ -62,16 +62,16 @@ template <typename TValue, typename TInput>
 using TResult = mapbox::util::variant<Error, Success<TValue, TInput>>;
 
 
-template<typename TVal>
+template<typename Tval>
 struct TNothing
 {
 
 };
 
-template<typename TVal>
+template<typename Tval>
 struct TSome
 {
-	TVal v;
+	Tval v;
 };
 
 //
@@ -82,18 +82,18 @@ using Maybe = mapbox::util::variant<TNothing<TValue>, TSome<TValue>>;
 
 
 
-template<typename TVal>
-std::function<Maybe<TVal>()> Nothing = []()->Maybe<TVal>
+template<typename Tval>
+std::function<Maybe<Tval>()> Nothing = []()->Maybe<Tval>
 {
-	return TNothing<TVal>{  };
+	return TNothing<Tval>{  };
 };
 
 
 
-template<typename TVal>
-std::function <Maybe<TVal>(TVal)> Some = [](TVal v)->TSome<TVal>
+template<typename Tval>
+std::function <Maybe<Tval>(Tval)> Some = [](Tval v)->TSome<Tval>
 {
-	return TSome<TVal>{ v };
+	return TSome<Tval>{ v };
 };
 
 
@@ -486,16 +486,23 @@ Parser<std::list<char>, Ti> whitespace()
 }
 
 
-template<typename TVal, typename Ti>
-Parser<Maybe<TVal>, Ti> opt(Parser < TVal, Ti> p)
+template<typename Tval, typename Ti>
+Parser<Maybe<Tval>, Ti> opt(Parser < Tval, Ti> p)
 {
 
-	Parser<Maybe<TVal>, Ti> someParser =  mapM<TVal, Maybe<TVal>>(p, Some<TVal>);
+	Parser<Maybe<Tval>, Ti> someParser =  mapM<Tval, Maybe<Tval>>(p, Some<Tval>);
 
-	Parser<Maybe<TVal>, Ti> nothingParser = returnM<Maybe<TVal>, Ti>(Nothing<TVal>());
+	Parser<Maybe<Tval>, Ti> nothingParser = returnM<Maybe<Tval>, Ti>(Nothing<Tval>());
 
 	return orElse(someParser, nothingParser);
 
+
+}
+
+
+template<typename Tval, typename Ti>
+Parser<int, Ti> pint()
+{
 
 }
 
