@@ -212,6 +212,19 @@ Parser<std::pair<TTokena, TTokenb>, TInput>  andThen(Parser<TTokena, TInput> pa,
 	});
 }
 
+template <typename TToken, typename Ti>
+Parser<std::list<TToken>, Ti> many1(Parser<TToken, Ti> p)
+{
+	return bindM<TToken, std::list<TToken>, Ti>(p, [p](TToken pResult)->Parser<std::list<TToken>, Ti>
+	{
+		return bindM<std::list<TToken>, std::list<TToken>, Ti>(many<TToken, Ti>(p), [pResult](std::list<TToken> manyLstResult)->Parser<std::list<TToken>, Ti>
+		{
+			manyLstResult.push_front(pResult);
+			return returnM<std::list<TToken>, Ti>(manyLstResult);
+		});
+	});
+}
+
 
 template<typename TFuna, typename TFunb,  typename TInput>
 Parser<TFunb, TInput> applyM(Parser < std::function<TFunb(TFuna)>, TInput> pf, Parser<TFuna, TInput> pa)
@@ -405,7 +418,10 @@ TResult<std::list<TItem>, Ti> parserZeroOrMore(Parser<TItem, Ti> parser, Ti inpu
 		return TResult<std::list<TItem>, Ti>(r);
 	}
 	else
-		return firstErr;
+	{
+		Success< std::list<TItem>, Ti> r = { std::make_pair(lstRes, input) };
+		return TResult<std::list<TItem>, Ti>(r);
+	}
 }
 
 
@@ -429,12 +445,12 @@ Parser<char, Ti> whitespaceChar()
 	return anyOf<char, Ti>(lc);
 }
 
-
 template<typename Ti>
 Parser<std::list<char>, Ti> whitespace()
 {
 	return many<char, Ti>(whitespaceChar<Ti>());
 }
+
 
 int main()
 {
@@ -622,7 +638,7 @@ int main()
 		 std::cout << "test whitespace" << std::endl;
 
 		 Parser<std::list<char>, std::string> wts = whitespace< std::string>();
-		 TResult< std::list<char>, std::string> ret = runOnInput< std::list<char>, std::string>(wts, " \t \n asdfaa");
+		 TResult< std::list<char>, std::string> ret = runOnInput< std::list<char>, std::string>(wts, " a \t \n asdfaa");
 		  ret.match(
 			 [](Success<std::list<char>, std::string> r) { std::cout << "(";
 
@@ -634,12 +650,31 @@ int main()
 
 	 }
 
+	 {
+
+		 std::cout << "test whitespace" << std::endl;
+
+		 std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+		 Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
+		 using TDigList = std::list<char>;
+		 Parser<TDigList, std::string> digits = many1<char, std::string>(parseDigit);
+
+		 TResult<TDigList, std::string> ret = runOnInput<TDigList, std::string>(digits, "azz");
+		 ret.match(
+			 [](Success<TDigList, std::string> r) { std::cout << "(";
+
+													 std::ostream_iterator<char> out_it(std::cout, " ");
+													 std:copy(r.value.first.begin(), r.value.first.end(), out_it);
+													 
+
+													std::cout<< ", " << r.value.second << ")" << std::endl; },
+			 [](Error e) { std::cout << e.error << std::endl; }
+		 );
+
+	 }
 
 
-
-	 
-
-
+	
 	 getchar();
 
 	return 0;
