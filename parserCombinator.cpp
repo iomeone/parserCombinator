@@ -27,6 +27,19 @@ auto curry(Function function, Arguments... args) {
 	}
 }
 
+template< class F > struct Flip {
+	F f = F();
+
+	constexpr Flip(F f) : f(std::move(f)) { }
+
+	template< class X, class Y >
+	constexpr auto operator () (X&& x, Y&& y)
+		-> typename std::result_of< F(Y, X) >::type
+	{
+		return f(std::forward<Y>(y), std::forward<X>(x));
+	}
+};
+
 
 
 
@@ -254,9 +267,7 @@ Parser<TToken, TInput> orElse(Parser<TToken, TInput> p1, Parser<TToken, TInput> 
 template <typename TToken, typename TInput>
 Parser<TToken, TInput> choice(std::list <Parser<TToken, TInput>> parserList)
 {
-	return std::accumulate(std::next(parserList.begin()), parserList.end(),
-		*parserList.begin(),
-		orElse<TToken, TInput>);
+	return std::accumulate(std::next(parserList.begin()), parserList.end(), *parserList.begin(), orElse<TToken, TInput>);
 }
 
 
@@ -303,27 +314,24 @@ Parser<std::list<TItem>, Ti> sequence(std::list<Parser<TItem, Ti>> lstParser)
 		 return lst;
 	};
 
-	//Parser<Tc, Ti> lift2(std::function<Tc(Ta, Tb)> f, Parser<Ta, Ti> xp, Parser<Tb, Ti> yp)
-	//auto curryLift2 = curry (lift2);
 	std::function< Parser<std::list<TItem>, Ti>(Parser<TItem, Ti>, Parser<std::list<TItem>, Ti>)>  curriedCons = curriedLift2<TItem, std::list<TItem>, std::list<TItem>, Ti>(cons);
-
 	
-	//std::function< Parser<TItem, Ti> (Parser<TItem, Ti>, Parser<TItem, Ti>) curryCons = curriedLift2<TItem, std::list<TItem>, std::list<TItem>, Ti>(cons);
-
-
-	//auto consP =lift2(cons);
-
 	std::list<TItem> emptylst = {};
-	Parser<std::list<TItem>, Ti> res{ returnM<std::list<TItem>, Ti>(emptylst) };
-	
-
-	for (auto it = lstParser.rbegin(); it != lstParser.rend(); ++it)
-	{
-		res = curriedCons(*it, res);
-	}
 
 
-	return res;
+
+	Parser<std::list<TItem>, Ti> liftedEmptyLst{ returnM<std::list<TItem>, Ti>(emptylst) };
+	return std::accumulate(lstParser.rbegin(), lstParser.rend(), liftedEmptyLst, Flip( curriedCons));
+
+
+
+
+	//Parser<std::list<TItem>, Ti> res{ returnM<std::list<TItem>, Ti>(emptylst) };
+	//for (auto it = lstParser.rbegin(); it != lstParser.rend(); ++it)
+	//{
+	//	res = curriedCons( *it, res);
+	//}
+	//return res;
 }
 
 
@@ -445,8 +453,12 @@ int main()
 	 r11.match(
 		 
 		 [](Success<std::list<char>, std::string> r) { std::cout << "(";
-													  std::transform(r.value.first.begin(), r.value.first.end(), r.value.first.begin(),
-														  [](char c) -> char {  std::cout << c << ","; return c; });
+
+													   std::cout << "(";
+													   std::transform(r.value.first.begin(), r.value.first.end(), r.value.first.begin(),
+														  [](char c) -> char {  std::cout << c << " "; return c; });
+													   std::cout << ")";
+
 													   std::cout << ", " << r.value.second << ")" << std::endl; },
 		 
 		 [](Error e) { std::cout << e.error << std::endl; });
