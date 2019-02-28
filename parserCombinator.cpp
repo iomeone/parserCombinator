@@ -8,6 +8,8 @@
 #include <list>
 #include <numeric>
 #include <vector>
+#include <iterator>
+
 
 #include <algorithm>
 
@@ -344,6 +346,58 @@ Parser<std::string, Ti> pstring(std::string str)
 	return mapM<std::list<char>, std::string, Ti>(lstSeqParser, charListToStr);
 
 }
+//std::function <TResult<TTokenb, TInput>(TInput)> parseFn =
+template<typename TItem, typename Ti>
+TResult<std::list<TItem>, Ti> parserZeroOrMore(Parser<TItem, Ti> parser, Ti input)
+{
+
+	std::list<TItem> lstRes;
+	Ti remainingInput ;
+	TResult<std::list<TItem>, Ti> firstErr;
+
+
+	TResult<TItem, Ti> ret = runOnInput<TItem, Ti>(parser, input);
+
+	ret.match(
+		[&lstRes, &remainingInput](Success<TItem, Ti> r) { lstRes.push_back(r.value.first); remainingInput = r.value.second; },
+		[&firstErr](Error e) { firstErr = e; });
+
+
+
+	if (lstRes.size() == 1)
+	{
+		for (; ; )
+		{
+			bool shouldBreak = false;
+			TResult< TItem, Ti> ret = runOnInput<TItem, Ti>(parser ,remainingInput);
+			ret.match(
+				[&remainingInput, &lstRes](Success<TItem, Ti> r) { remainingInput = r.value.second;  lstRes.push_back(r.value.first); },
+				[&shouldBreak](Error e) {  shouldBreak = true; });
+			if (shouldBreak) break;
+		}
+
+		Success< std::list<TItem>, Ti> r = { std::make_pair(lstRes, remainingInput) };
+		return TResult<std::list<TItem>, Ti>(r);
+	}
+	else
+		return firstErr;
+
+
+	 
+}
+
+
+template<typename TItem, typename Ti>
+Parser<std::list<TItem>, Ti> manyx(Parser<TItem, Ti> parser)
+{
+	std::function < TResult<std::list<TItem>, Ti>(Ti)> innerFn = [parser](Ti input)->TResult<std::list<TItem>, Ti>
+	{
+		return parserZeroOrMore(parser, input);
+	};
+
+	 Parser<std::list<TItem>, Ti> p{ innerFn };;
+	 return p;
+}
 
 
 
@@ -487,10 +541,34 @@ int main()
 	 {
 		 std::cout << "test pstring" << std::endl;
 	
-		 TResult< std::string, std::string> ret = runOnInput< std::string, std::string>(pstring<std::string>("hahaha"), "hahaha1231");
+		 TResult< std::string, std::string> ret = runOnInput< std::string, std::string>(pstring<std::string>("ABC"), "AB|DE");
 		 ret.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+			 [](Error e) { std::cout << e.error << std::endl; });
+	 }
+
+
+
+	 {
+		 std::cout << "test many" << std::endl;
+
+		 auto p = manyx(pchar('A'));
+		 TResult< std::list<char>, std::string> ret = runOnInput< std::list<char>, std::string>(p, "|AAAD");
+		 ret.match(
+			 [](Success<std::list<char>, std::string> r) { std::cout << "(";
+			 
+				std::ostream_iterator<char> out_it(std::cout, " ");
+				//std:copy(r.value.first.begin(), r.value.first.end(), out_it);
+				std::transform(r.value.first.begin(), r.value.first.end(), out_it,[](char c)->char {   return c; });
+			 
+				std::cout << ", " << r.value.second << ")" << std::endl; },
 			 [](Error e) { std::cout << e.error << " "; });
 	 }
+
+
+
+
+
+
 
 
 
