@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 
 #include <mapbox/variant.hpp>
 
@@ -89,6 +90,27 @@ TResult<TToken, TInput> runOnInput(Parser<TToken, TInput> parser, TInput t)
 }
 
 
+std::string getPrintable(char c) {
+	std::string s;
+	s.push_back(c);
+
+	if (c == '\n')
+		return  "\\n";
+	else if (c == '\\t')
+		return "\\t";
+	else if (c == ' ')
+		return "\\sapce";
+	else
+	{
+		std::stringstream ss;
+		int i = int(c);
+		ss << "\\0x" << std::setfill('0') << std::setw(2) << std::hex << i;
+		
+		s = ss.str();
+		return s;
+	}
+}
+
 Parser<char, std::string> pchar(char charToMatch)
 {
 	std::function <TResult<char, std::string>(std::string)> parseFn =
@@ -109,7 +131,10 @@ Parser<char, std::string> pchar(char charToMatch)
 			else
 			{
 				std::stringstream s;
-				s << "Expecting \'" << charToMatch << "\'. Got" << "\'" << first << "\' ";
+				
+				s << "Expecting \'" << getPrintable(charToMatch) << "\'. Got" << "\'" << first << "\' ";
+				
+					
 				std::string r = s.str();
 				return TResult <char, std::string>(Error{ r });
 
@@ -381,10 +406,8 @@ TResult<std::list<TItem>, Ti> parserZeroOrMore(Parser<TItem, Ti> parser, Ti inpu
 	}
 	else
 		return firstErr;
-
-
-	 
 }
+
 
 
 template<typename TItem, typename Ti>
@@ -399,8 +422,19 @@ Parser<std::list<TItem>, Ti> many(Parser<TItem, Ti> parser)
 	 return p;
 }
 
+template<typename Ti>
+Parser<char, Ti> whitespaceChar()
+{
+	std::list<char> lc = { ' ', '\t', '\n' };
+	return anyOf<char, Ti>(lc);
+}
 
 
+template<typename Ti>
+Parser<std::list<char>, Ti> whitespace()
+{
+	return many<char, Ti>(whitespaceChar<Ti>());
+}
 
 int main()
 {
@@ -567,7 +601,6 @@ int main()
 
 
 	 {
-
 		 std::cout << "test manyAb" << std::endl;
 
 		 auto manyAb = many<std::string, std::string>(pstring<std::string>("AB"));
@@ -585,6 +618,26 @@ int main()
 
 
 
+	 {
+		 std::cout << "test whitespace" << std::endl;
+
+		 Parser<std::list<char>, std::string> wts = whitespace< std::string>();
+		 TResult< std::list<char>, std::string> ret = runOnInput< std::list<char>, std::string>(wts, " \t \n asdfaa");
+		  ret.match(
+			 [](Success<std::list<char>, std::string> r) { std::cout << "(";
+
+		 std::ostream_iterator<std::string> out_it(std::cout, " ");
+		 std::transform(r.value.first.begin(), r.value.first.end(), out_it, [](char c)->std::string {   return getPrintable(c); });
+
+		 std::cout << ", " << r.value.second << ")" << std::endl; },
+			 [](Error e) { std::cout << e.error << " "; });
+
+	 }
+
+
+
+
+	 
 
 
 	 getchar();
