@@ -69,7 +69,7 @@ struct TNothing
 };
 
 template<typename TVal>
-struct TMaybe
+struct TSome
 {
 	TVal v;
 };
@@ -78,7 +78,7 @@ struct TMaybe
 
 
 template <typename TValue>
-using Maybe = mapbox::util::variant<TNothing<TValue>, TMaybe<TValue>>;
+using Maybe = mapbox::util::variant<TNothing<TValue>, TSome<TValue>>;
 
 
 
@@ -91,9 +91,9 @@ std::function<Maybe<TVal>()> Nothing = []()->Maybe<TVal>
 
 
 template<typename TVal>
-std::function <Maybe<TVal>(TVal)> Some = [](TVal v)->TMaybe<TVal>
+std::function <Maybe<TVal>(TVal)> Some = [](TVal v)->TSome<TVal>
 {
-	return TMaybe<TVal>{ v };
+	return TSome<TVal>{ v };
 };
 
 
@@ -744,7 +744,7 @@ int main()
 							Maybe<char> mc = r.value.first.second;
 							r.value.first.second.match(
 								[](TNothing<char> r) {std::cout << "Nothing" ; },
-								[](TMaybe<char> r) {std::cout << "Some " << r.v ; }
+								[](TSome<char> r) {std::cout << "Some " << r.v ; }
 							
 							);
 
