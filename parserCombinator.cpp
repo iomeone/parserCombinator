@@ -20,13 +20,6 @@ decltype(auto) comp(F&& f, G&& g)
 	return [=](auto x) { return f(g(x)); };
 }
 
-template<typename Function, typename... Arguments>
-auto curry(Function function, Arguments... args) {
-	return [=](auto... rest) {
-		return function(args..., rest...);
-	}
-}
-
 template< class F > struct Flip {
 	F f = F();
 
@@ -271,14 +264,16 @@ Parser<TToken, TInput> choice(std::list <Parser<TToken, TInput>> parserList)
 }
 
 
+
+
 template <typename TToken, typename TInput>
 Parser<TToken, TInput> anyOf(std::list<char> chlst)
 {
-	std::list <Parser <char, std::string>> lstParser;
-	for (auto it = chlst.begin(); it != chlst.end(); ++it)
-	{
-		lstParser.push_back(pchar(*it));
-	}
+	using TLstParser = std::list <Parser <char, TInput>>;
+	 
+	TLstParser lstParser;
+	std::transform(std::begin(chlst), std::end(chlst), std::back_inserter(lstParser), [](char c)->Parser <char, TInput> { return pchar(c); });
+	//lstParser = std::accumulate(chlst.begin(), chlst.end(), lstParser, [](TLstParser lstParser, char c)->TLstParser { lstParser.push_back(pchar(c)); return lstParser; });
 	return choice<char, TInput>(lstParser);
 }
 
@@ -318,21 +313,40 @@ Parser<std::list<TItem>, Ti> sequence(std::list<Parser<TItem, Ti>> lstParser)
 	
 	std::list<TItem> emptylst = {};
 
-
-
 	Parser<std::list<TItem>, Ti> liftedEmptyLst{ returnM<std::list<TItem>, Ti>(emptylst) };
 	return std::accumulate(lstParser.rbegin(), lstParser.rend(), liftedEmptyLst, Flip( curriedCons));
-
-
-
-
-	//Parser<std::list<TItem>, Ti> res{ returnM<std::list<TItem>, Ti>(emptylst) };
-	//for (auto it = lstParser.rbegin(); it != lstParser.rend(); ++it)
-	//{
-	//	res = curriedCons( *it, res);
-	//}
-	//return res;
 }
+
+
+std::list<char> strToCharList(std::string s)
+{
+	std::list<char> lstchar;
+	std::transform(std::begin(s), std::end(s), std::back_inserter(lstchar), [](char c)->char { return c; });
+	return lstchar;
+}
+
+
+std::string charListToStr(std::list<char> cl)
+{
+	std::string s;
+	std::transform(std::begin(cl), std::end(cl), std::back_inserter(s), [](char c)->char { return c; });
+	return s;
+}
+
+template<typename Ti>
+Parser<std::string, Ti> pstring(std::string str)
+{
+	std::list<char> cl = strToCharList(str);
+	std::list<Parser<char, Ti>> lpc;
+	std::transform(cl.begin(), cl.end(), std::back_inserter(lpc), [](char c)->Parser<char, Ti> {return pchar(c); });
+
+	Parser<std::list<char>, Ti> lstSeqParser =  sequence<char, Ti>(lpc);
+
+	return mapM<std::list<char>, std::string, Ti>(lstSeqParser, charListToStr);
+
+}
+
+
 
 
 int main()
@@ -371,7 +385,7 @@ int main()
 	r5.match([](Success<int, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
 		[](Error e) { std::cout << e.error << std::endl; });
 
-
+	std::cout << "test anyof" << std::endl;
 	std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
 	Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
 	TResult<char, std::string> r6 = runOnInput<char, std::string>(parseDigit, "1azz");
@@ -443,26 +457,42 @@ int main()
 
 
 
-	 //test
-	 std::list<Parser<char, std::string>> parsers = std::list<Parser<char, std::string>>{ pchar('a'), pchar('b'), pchar('c') };
 
-	 Parser<std::list<char>, std::string> combined = sequence<char, std::string>(parsers);
+	 {
+		 std::cout << "sequence" << std::endl;
+		 std::list<Parser<char, std::string>> parsers = std::list<Parser<char, std::string>>{ pchar('a'), pchar('b'), pchar('c') };
+
+		 Parser<std::list<char>, std::string> combined = sequence<char, std::string>(parsers);
 
 
-	 TResult<std::list<char>, std::string> r11 = runOnInput<std::list<char>, std::string>(combined, "abc1azz");
-	 r11.match(
-		 
-		 [](Success<std::list<char>, std::string> r) { std::cout << "(";
+		 TResult<std::list<char>, std::string> r11 = runOnInput<std::list<char>, std::string>(combined, "abc1azz");
+		 r11.match(
 
-													   std::cout << "(";
-													   std::transform(r.value.first.begin(), r.value.first.end(), r.value.first.begin(),
-														  [](char c) -> char {  std::cout << c << " "; return c; });
-													   std::cout << ")";
+			 [](Success<std::list<char>, std::string> r) { std::cout << "(";
 
-													   std::cout << ", " << r.value.second << ")" << std::endl; },
-		 
-		 [](Error e) { std::cout << e.error << std::endl; });
+		 std::cout << "(";
+		 std::transform(r.value.first.begin(), r.value.first.end(), r.value.first.begin(),
+			 [](char c) -> char {  std::cout << c << " "; return c; });
+		 std::cout << ")";
+
+		 std::cout << ", " << r.value.second << ")" << std::endl; },
+
+			 [](Error e) { std::cout << e.error << std::endl; });
+	 }
+
 	 
+
+
+
+
+	 {
+		 std::cout << "test pstring" << std::endl;
+	
+		 TResult< std::string, std::string> ret = runOnInput< std::string, std::string>(pstring<std::string>("hahaha"), "hahaha1231");
+		 ret.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+			 [](Error e) { std::cout << e.error << " "; });
+	 }
+
 
 
 	 getchar();
