@@ -62,6 +62,40 @@ template <typename TValue, typename TInput>
 using TResult = mapbox::util::variant<Error, Success<TValue, TInput>>;
 
 
+template<typename TVal>
+struct TNothing
+{
+
+};
+
+template<typename TVal>
+struct TMaybe
+{
+	TVal v;
+};
+
+//
+
+
+template <typename TValue>
+using Maybe = mapbox::util::variant<TNothing<TValue>, TMaybe<TValue>>;
+
+
+
+template<typename TVal>
+std::function<Maybe<TVal>()> Nothing = []()->Maybe<TVal>
+{
+	return TNothing<TVal>{  };
+};
+
+
+
+template<typename TVal>
+std::function <Maybe<TVal>(TVal)> Some = [](TVal v)->TMaybe<TVal>
+{
+	return TMaybe<TVal>{ v };
+};
+
 
 //type Parser < 'a> = {
 //	parseFn : (Input->Result < 'a * Input>)
@@ -452,6 +486,20 @@ Parser<std::list<char>, Ti> whitespace()
 }
 
 
+template<typename TVal, typename Ti>
+Parser<Maybe<TVal>, Ti> opt(Parser < TVal, Ti> p)
+{
+
+	Parser<Maybe<TVal>, Ti> someParser =  mapM<TVal, Maybe<TVal>>(p, Some<TVal>);
+
+	Parser<Maybe<TVal>, Ti> nothingParser = returnM<Maybe<TVal>, Ti>(Nothing<TVal>());
+
+	return orElse(someParser, nothingParser);
+
+
+}
+
+
 int main()
 {
 
@@ -664,7 +712,7 @@ int main()
 			 [](Success<TDigList, std::string> r) { std::cout << "(";
 
 													 std::ostream_iterator<char> out_it(std::cout, " ");
-													 std:copy(r.value.first.begin(), r.value.first.end(), out_it);
+													 std::copy(r.value.first.begin(), r.value.first.end(), out_it);
 													 
 
 													std::cout<< ", " << r.value.second << ")" << std::endl; },
@@ -673,6 +721,42 @@ int main()
 
 	 }
 
+
+	 {
+		 std::cout << "test opt parser" << std::endl;
+		 std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+		 Parser<char, std::string> digit = anyOf<char, std::string>(lstDigit);
+	 
+		 using  TCharMaybeChar = std::pair<char, Maybe<char>>;
+		 Parser<std::pair<char, Maybe<char>>, std::string> digitThenSemicolon = andThen<char, Maybe<char>>(
+																												digit, opt<char, std::string>(pchar('a'))
+																											);
+
+		 TResult<TCharMaybeChar, std::string> ret = runOnInput<TCharMaybeChar, std::string>(digitThenSemicolon, "1ada--zz");
+
+
+		 ret.match(
+			 [](Success<TCharMaybeChar, std::string> r) 
+					{ 
+							std::cout << "("; std::cout << r.value.first.first << " ";
+								
+
+							Maybe<char> mc = r.value.first.second;
+							r.value.first.second.match(
+								[](TNothing<char> r) {std::cout << "Nothing" ; },
+								[](TMaybe<char> r) {std::cout << "Some " << r.v ; }
+							
+							);
+
+								
+						    std::cout << ", "  << r.value.second << ")" << std::endl;
+					},
+			 [](Error e) { std::cout << e.error << std::endl; }
+		 );
+
+
+
+	 }
 
 	
 	 getchar();
