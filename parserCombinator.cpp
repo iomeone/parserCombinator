@@ -594,6 +594,40 @@ Parser<b, Ti> ignoreWhitespaceAround(Parser<Tignore1, Ti> pa, Parser<b, Ti> pb, 
 }
 
 
+
+template<typename a, typename b, typename Ti>
+Parser<std::list<a>, Ti> sepBy1(Parser<a, Ti> p, Parser<b, Ti> sep)
+{
+	Parser<a, Ti> sepThenP = throwLeft<b, a>(sep, p);
+
+	Parser<std::list<a>, Ti> manySepThenP = many<a, Ti>(sepThenP);
+
+	Parser<std::pair<a, std::list<a>>, Ti> wholepairList = andThen<a, std::list<a>>(p, manySepThenP);
+
+	Parser<std::list<a>, Ti> resultArrayParser = mapM< std::pair<a, std::list<a>>, std::list<a>>(wholepairList,
+		[](std::pair<a, std::list<a>> pairList)
+			{
+					std::list<a> l = pairList.second;
+					l.push_front(pairList.first);
+					return l;
+			});
+
+	return resultArrayParser;
+}
+
+template<typename a, typename b, typename Ti>
+Parser<std::list<a>, Ti> sepBy(Parser<a, Ti> p, Parser<b, Ti> sep)
+{
+	Parser<std::list<a>, Ti> resultArrayParser = sepBy1<a, b, Ti>(p, sep);
+
+	std::list<a> emptylist;
+	Parser<std::list<a>, Ti> resultArrayParser2 = orElse<std::list<a>, Ti>(resultArrayParser, returnM<std::list<a>, Ti> (emptylist));
+	
+	return resultArrayParser2;
+}
+
+
+
 int main()
 {
 	{
@@ -971,8 +1005,54 @@ int main()
 
 
 	{
+		std::cout << "test sep sep1" << std::endl;
+
+		Parser<char, std::string>comma = pchar(',');
+
+		std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+		Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
 
 
+		Parser<std::list<char>, std::string> zeroOrMoreDigitList = sepBy<char, char, std::string>(parseDigit, comma);
+
+		Parser<std::list<char>, std::string> oneOrMoreDigitList = sepBy1<char, char, std::string>(parseDigit, comma);
+
+
+		std::list<std::string> testStrs = { "1;", "1,2;", "1,2,3;", "Z;" };
+
+		for_each(testStrs.begin(), testStrs.end(), [zeroOrMoreDigitList, oneOrMoreDigitList](std::string s)
+		{
+			{
+				std::cout << "zeroOrMoreDigitList:" << std::endl;
+				TResult< std::list<char>, std::string> ret = runOnInput<std::list<char>, std::string>(zeroOrMoreDigitList, s);
+				ret.match(
+					[](Success<std::list<char>, std::string> r) { std::cout << "(";
+				std::ostream_iterator<char> out_it(std::cout, " ");
+				std::copy(r.value.first.begin(), r.value.first.end(), out_it);
+				std::cout << "," << r.value.second << ")" << std::endl; },
+					[](Error e) { std::cout << e.error << " "; });
+			}
+			{
+				std::cout << "oneOrMoreDigitList:" << std::endl;
+				TResult< std::list<char>, std::string> ret = runOnInput<std::list<char>, std::string>(oneOrMoreDigitList, s);
+				ret.match(
+					[](Success<std::list<char>, std::string> r) { std::cout << "(";
+				std::ostream_iterator<char> out_it(std::cout, " ");
+				std::copy(r.value.first.begin(), r.value.first.end(), out_it);
+				std::cout << "," << r.value.second << ")" << std::endl; },
+					[](Error e) { std::cout << e.error << " "; });
+			}
+
+
+
+
+
+
+			//std::cout << s << std::endl; 
+		});
+
+
+		
 
 
 	}
