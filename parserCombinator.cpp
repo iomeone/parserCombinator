@@ -486,6 +486,12 @@ Parser<std::list<char>, Ti> whitespace()
 }
 
 
+template<typename Ti>
+Parser<std::list<char>, Ti> whitespace1()
+{
+	return many1<char, Ti>(whitespaceChar<Ti>());
+}
+
 template<typename Tval, typename Ti>
 Parser<Maybe<Tval>, Ti> opt(Parser < Tval, Ti> p)
 {
@@ -865,6 +871,37 @@ int main()
 			[](Error e) { std::cout << e.error << std::endl; }
 		);
 	}
+
+
+
+
+	{
+		std::cout << "test ab \\t \\ncd -> (ab,cd), \"\"" << std::endl;
+
+		Parser<std::list<char>, std::string> whitesps1= whitespace1<std::string>();
+
+		Parser<std::string, std::string> pab = pstring< std::string>("AB");
+		Parser<std::string, std::string> pcd = pstring< std::string>("CD");
+
+		
+		Parser<std::string, std::string> p1 = throwRight<std::string, std::list<char>, std::string>(pab, whitesps1);
+
+		using TStringPair = std::pair<std::string, std::string>;
+		Parser< TStringPair, std::string> pab_cd = andThen<std::string, std::string>(p1, pcd);
+
+
+		TResult< TStringPair, std::string> ret = runOnInput<TStringPair, std::string>(pab_cd, "AB \t\n CD-d");
+		ret.match(
+			[](Success<TStringPair, std::string> r) { std::cout << "((" << r.value.first.first <<", " << r.value.first.second <<") ," << r.value.second << ")" << std::endl; },
+			[](Error e) { std::cout << e.error << " "; });
+
+
+	}
+
+
+
+
+
 
 
 
