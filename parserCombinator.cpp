@@ -718,32 +718,110 @@ Parser<std::list<a>, Ti> sepBy(Parser<a, Ti> p, Parser<b, Ti> sep)
 
 
 
+
+
+
+
+struct TIF
+{
+
+};
+
+struct TFOR
+{
+
+};
+
+
+using Keyword = mapbox::util::variant<TIF, TFOR>;
+
+
+std::function <Keyword()> IF = []()->Keyword
+{
+	return TIF();
+};
+
+
+std::function<Keyword()> FOR = []()->Keyword
+{
+	return TFOR();
+};
+
+
+
+
+
+
+
+
 int main()
 {
 
-	{
-		TResult<char, std::string> r1 = runOnInput<char, std::string>(pchar('b'), "aaaa");
+	//{
+	//	TResult<char, std::string> r1 = runOnInput<char, std::string>(pchar('b'), "aaaa");
 
-		r1.match(
-			[](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
+	//	r1.match(
+	//		[](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
+	//}
+
+	//{
+	//		using TPairToken = std::pair<char, char>;
+
+	//		TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(andThen(pchar('a'), pchar('b')), "cdbabb");
+	//		r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
+	//			[](Error e) {  std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
+
+	//}
+
+	//{
+	//	using TPairToken = std::pair<char, char>;
+	//	TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(setLabel(andThen(pchar('A'), pchar('B')), "AB"), "cdbabb");
+	//	r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) {  std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
+	//}
+
+	//{
+
+	//		std::cout << "test anyof" << std::endl;
+	//		std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+	//		Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
+	//		parseDigit = setLabel(parseDigit, "digit");
+	//		TResult<char, std::string> r6 = runOnInput<char, std::string>(parseDigit, "aazz");
+	//		r6.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//			[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
+
+	//}
+
+
+	{
+		Parser<Keyword, std::string> keyword_IF = mapM<std::pair<char, char>, Keyword, std::string>(andThen(pchar('i'), pchar('f')), [](std::pair<char, char>) -> Keyword{return IF();});
+
+		
+		Parser<Keyword, std::string> keyword_FOR = mapM<std::string, Keyword, std::string>(pstring< std::string>("for"), [](std::string) -> Keyword {return FOR(); });
+
+		std::list<Parser<Keyword, std::string>> ks = { keyword_IF, keyword_FOR };
+
+
+		Parser<Keyword, std::string> pkeys = choice<Keyword, std::string>(ks);
+
+		pkeys = setLabel<Keyword, std::string>(pkeys, "IF-FOR");
+
+		TResult<Keyword, std::string> ret = runOnInput<Keyword, std::string>(pkeys, "fo1rzz");
+		
+		ret.match(
+			[](Success<Keyword, std::string> r) { std::cout << "(" /*<< r.value.first*/ << ", " << r.value.second << ")" << std::endl; },
+			[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; }
+		);
+
 	}
 
-	{
-			using TPairToken = std::pair<char, char>;
 
-			TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(andThen(pchar('a'), pchar('b')), "cdbabb");
-			r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
-				[](Error e) {  std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
-	}
 
-	{
-		using TPairToken = std::pair<char, char>;
-		TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(setLabel(andThen(pchar('A'), pchar('B')), "AB"), "cdbabb");
-		r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) {  std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
-	}
+
+
+
 
 
 
