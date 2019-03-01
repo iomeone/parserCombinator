@@ -130,10 +130,12 @@ std::string getPrintable(char c) {
 
 	if (c == '\n')
 		return  "\\n";
-	else if (c == '\\t')
+	else if (c == '\t')
 		return "\\t";
 	else if (c == ' ')
 		return "\\sapce";
+	else if (c == '\r')
+		return "\\r";
 	else
 	{
 		std::stringstream ss;
@@ -475,7 +477,7 @@ Parser<std::list<TItem>, Ti> many(Parser<TItem, Ti> parser)
 template<typename Ti>
 Parser<char, Ti> whitespaceChar()
 {
-	std::list<char> lc = { ' ', '\t', '\n' };
+	std::list<char> lc = { ' ', '\t', '\n', '\r'};
 	return anyOf<char, Ti>(lc);
 }
 
@@ -571,6 +573,24 @@ Parser<Tokenb, Ti> throwLeft(Parser<Tokena, Ti> pa, Parser<Tokenb, Ti> pb)
 	{
 		return pairAB.second;
 	});
+}
+
+
+template<typename a ,typename b, typename c, typename Ti>
+Parser<b, Ti> between(Parser<a, Ti>  pa, Parser<b, Ti> pb, Parser<c, Ti> pc)
+{
+	Parser<b, Ti> pb_ = throwLeft<a, b, Ti>(pa, pb);
+
+	Parser<b, Ti> pb__ = throwRight< b, c, Ti>(pb_, pc);
+
+	return pb__;
+}
+
+
+template<typename Tignore1, typename b, typename Tignore2, typename Ti>
+Parser<b, Ti> ignoreWhitespaceAround(Parser<Tignore1, Ti> pa, Parser<b, Ti> pb, Parser<Tignore2, Ti> pc)
+{
+	return between<Tignore1, b, Tignore2>(pa, pb, pc);
 }
 
 
@@ -900,7 +920,62 @@ int main()
 
 
 
+	{
+		{
+			std::cout << "test between." << std::endl;
 
+			Parser<char, std::string> pdoublequote = pchar('"');
+
+			Parser<int, std::string> quotedInteger = between<char, int, char, std::string>(pdoublequote, pint<std::string>(), pdoublequote);
+
+			TResult< int, std::string> ret = runOnInput<int, std::string>(quotedInteger, "\"213\"AB \t\"\n CD-d");
+			ret.match(
+				[](Success<int, std::string> r) { std::cout << "(" << r.value.first <<"," << r.value.second << ")" << std::endl; },
+				[](Error e) { std::cout << e.error << " "<<std::endl; });
+		}
+		{
+
+			std::cout << "test between2." << std::endl;
+			Parser<std::list<char>, std::string> whitesps = whitespace<std::string>();
+
+
+			Parser<std::string, std::string> parseABC = pstring<std::string>("ABC");
+			Parser<std::string, std::string> parse_ABC_ = ignoreWhitespaceAround< std::list<char>, std::string, std::list<char>>(whitesps, parseABC, whitesps);
+
+			TResult< std::string, std::string> ret = runOnInput<std::string, std::string>(parseABC, " ABC");
+			ret.match(
+				[](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << "," << r.value.second << ")" << std::endl; },
+				[](Error e) { std::cout << e.error << " " << std::endl; });
+		
+
+		}
+
+		{
+
+			std::cout << "test between3." << std::endl;
+			Parser<std::list<char>, std::string> whitesps = whitespace<std::string>();
+
+
+			Parser<std::string, std::string> parseABC = pstring<std::string>("ABC");
+			Parser<std::string, std::string> parse_ABC_ = ignoreWhitespaceAround< std::list<char>, std::string, std::list<char>>(whitesps, parseABC, whitesps);
+
+			TResult< std::string, std::string> ret = runOnInput<std::string, std::string>(parse_ABC_, " ABC  \n\t ad");
+			ret.match(
+				[](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << "," << r.value.second << ")" << std::endl; },
+				[](Error e) { std::cout << e.error << " "; });
+
+
+		}
+
+	}
+
+
+	{
+
+
+
+
+	}
 
 
 
