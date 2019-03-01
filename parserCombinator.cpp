@@ -500,10 +500,48 @@ Parser<Maybe<Tval>, Ti> opt(Parser < Tval, Ti> p)
 }
 
 
-template<typename Tval, typename Ti>
+//Tval is the opt parser result type, also  is the Maybe<Tval> type
+template< typename Ti>
 Parser<int, Ti> pint()
 {
+	using TpairMaybeLstChar = std::pair<Maybe<char>, std::list<char>>;
 
+	std::function<int(TpairMaybeLstChar)> resultToInt = [](TpairMaybeLstChar pairOfMaybeAndLstChar) -> int
+	{
+		Maybe<char> sign = pairOfMaybeAndLstChar.first;
+		std::list<char>  charList = pairOfMaybeAndLstChar.second;
+		std::string charDigits =  charListToStr(charList);
+		int inted = std::stoi(charDigits);
+
+		sign.match(
+			[&inted](TSome<char> something) { inted = -inted; },
+			[](TNothing<char> nothing) {  }
+		);
+
+		return inted;
+		
+	};
+
+
+	std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+	Parser<char, std::string> digit = anyOf<char, std::string>(lstDigit);
+
+	using TDigList = std::list<char>;
+	Parser<TDigList, std::string> digits = many1<char, std::string>(digit);
+
+	Parser<Maybe<char>, std::string> maybeNegSign = opt<char, std::string>(pchar('-'));
+
+	Parser<std::pair<Maybe<char>, TDigList>, std::string> strDig = andThen(maybeNegSign, digits);
+
+
+	Parser<Maybe<char>, std::string> negsopt = opt<char, std::string>(pchar('-'));;
+
+	using  TCharMaybeChar = std::pair<char, Maybe<char>>;
+	Parser<std::pair< Maybe<char>, std::list<char>>, std::string> intParser = andThen< Maybe<char>, std::list<char>, Ti>(
+		negsopt, digits);
+
+		
+	return mapM<std::pair< Maybe<char>, std::list<char>>, int, std::string>(intParser, resultToInt);
 }
 
 
@@ -760,10 +798,21 @@ int main()
 					},
 			 [](Error e) { std::cout << e.error << std::endl; }
 		 );
-
-
-
 	 }
+
+
+
+	 {
+		 std::cout << "test pint parser" << std::endl;
+		
+		 TResult<int, std::string> ret = runOnInput<int, std::string>(pint<std::string>(), "-2ada--zz");
+
+		 ret.match(
+			 [](Success<int, std::string> r){ std::cout << r.value.first << " " << r.value.second << std::endl;},
+			 [](Error e) { std::cout << e.error << std::endl; }
+		 );
+	 }
+
 
 	
 	 getchar();
