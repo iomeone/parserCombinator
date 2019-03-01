@@ -48,9 +48,19 @@ struct Success {
 };
 
 struct Error {
-	//ParserLabel l;
-	ParserError error;
-	//ParserPosition p;
+	Error(std::string l, std::string e, std::string p) :label(l), error(e), pos(p)
+	{
+
+	}
+	Error() 
+	{
+		label = "unset";
+		error = "unset";
+		pos = "unset";
+	}
+	ParserLabel label;
+	ParserError  error;
+	ParserPosition pos;
 };
 
 
@@ -106,10 +116,11 @@ template <typename TToken, typename TInput>
 struct Parser
 {
 	//Parser(std::function<TResult<TToken> (TInput)> p) : parseFn(std::move(p))
-	Parser(std::function<TResult<TToken, TInput>(TInput)> p) : parseFn(p) {}
+	Parser(std::function<TResult<TToken, TInput>(TInput)> p, ParserLabel l) : parseFn(p),label(l) {}
 
 	std::function<TResult<TToken, TInput>(TInput)> parseFn;
-	//ParserLabel label;
+
+	ParserLabel label;
 };
 
 
@@ -136,6 +147,12 @@ std::string getPrintable(char c) {
 		return "\\sapce";
 	else if (c == '\r')
 		return "\\r";
+	else if (isprint(c))
+	{
+		std::string s;
+		s.push_back(c);
+		return s;
+	}
 	else
 	{
 		std::stringstream ss;
@@ -147,13 +164,31 @@ std::string getPrintable(char c) {
 	}
 }
 
+std::list<char> strToCharList(std::string s)
+{
+	std::list<char> lstchar;
+	std::transform(std::begin(s), std::end(s), std::back_inserter(lstchar), [](char c)->char { return c; });
+	return lstchar;
+}
+
+
+std::string charListToStr(std::list<char> cl)
+{
+	std::string s;
+	std::transform(std::begin(cl), std::end(cl), std::back_inserter(s), [](char c)->char { return c; });
+	return s;
+}
+
+
 Parser<char, std::string> pchar(char charToMatch)
 {
+	std::string l;
+	l.push_back(charToMatch);
 	std::function <TResult<char, std::string>(std::string)> parseFn =
-		[charToMatch](std::string strinput)
+		[charToMatch, l](std::string strinput)
 	{
 		if (strinput.empty())
-			return TResult <char, std::string>(Error{ "no more input" });
+			return TResult <char, std::string>(Error(l, "no more input" , "pos"));
 		else
 		{
 			char first = strinput.at(0);
@@ -168,66 +203,124 @@ Parser<char, std::string> pchar(char charToMatch)
 			{
 				std::stringstream s;
 
-				s << "Expecting \'" << getPrintable(charToMatch) << "\'. Got" << "\'" << first << "\' ";
+				s << "Unexpected " << getPrintable(first);
 
 
 				std::string r = s.str();
-				return TResult <char, std::string>(Error{ r });
+				return TResult <char, std::string>(Error(l, r , "pos"));
 
 			}
-
 		}
 	};
-	return Parser<char, std::string>(parseFn);
+	return Parser<char, std::string>(parseFn, l);
 }
 
-template <typename TTokena, typename TTokenb, typename TInput>
-Parser<TTokenb, TInput>  bindM(Parser<TTokena, TInput> pa, std::function<Parser<TTokenb, TInput>(TTokena)> f)
+Parser<char, std::string> satisfy(std::function<bool(char)> predicate, ParserLabel label)
 {
-
-	std::function <TResult<TTokenb, TInput>(TInput)> parseFn =
-		[f, pa](TInput input)
+	std::function <TResult<char, std::string>(std::string)> parserFn = 
+		[predicate, label](std::string input)
 	{
+		if(input.empty())
+			return TResult <char, std::string>(Error(label, "no more input" , "pos"));
+		else
+		{
+			char first = input.at(0);
+			if (predicate(first))
+			{
+				std::string remaining = input.substr(1, input.length() - 1);
+				Success<char, std::string> v;
 
-		TResult<TTokena, TInput> ret = runOnInput<TTokena, TInput>(pa, input);
+				return TResult <char, std::string>(Success<char, std::string>{std::make_pair(first, remaining)});
+			}
+			else
+			{
+				std::stringstream s;
+				s << "Unexpected \'" << getPrintable(first) ;
+				std::string r = s.str();
+				return TResult <char, std::string>(Error{label, r, "pos" });
+			}
+		}
+	};
+	return Parser<char, std::string>(parserFn, label);
 
-		TResult<TTokenb, TInput> _result;
+}
+
+template<typename Tt, typename Ti>
+std::string getLabel(Parser<Tt, Ti> p)
+{
+	return p.label;
+}
+
+
+template<typename Tt, typename Ti>
+Parser<Tt, Ti> setLabel(Parser<Tt, Ti> pa, ParserLabel newLabel)
+{
+	std::function<TResult<Tt, Ti>(Ti)> parseFn = [pa, newLabel](Ti input)
+	{
+		TResult<Tt, Ti> ret = runOnInput<Tt, Ti>(pa, input);
+
+		TResult<Tt, Ti> _result;
 
 		ret.match(
-			[f, &_result](Success<TTokena, TInput> r) {
-			TTokena v = r.value.first;
-			TInput remaining = r.value.second;
-			Parser<TTokenb, TInput> pb = f(v);
+			[&_result](Success<Tt, Ti> r) { _result =  r; },
 
-			TResult<TTokenb, TInput> result = runOnInput<TTokenb, TInput>(pb, remaining);
-			_result = result;
-		},
-
-
-			[&_result](Error e) { _result = (TResult <TTokenb, TInput>(Error{ e })); }
+			[&_result, newLabel](Error e) { _result = TResult <Tt, Ti>(Error(newLabel, e.error, e.pos)); }
 		);
 
 		return _result;
 
 	};
 
-	//std::function <TResult<TTokenb, TInput>(TInput)> parseFn = nullptr;
-	Parser<TTokenb, TInput> pb{ parseFn };
+	
+	Parser<Tt, Ti> pb{ parseFn, newLabel };
 	return pb;
+}
 
+template <typename TTokena, typename TTokenb, typename TInput>
+Parser<TTokenb, TInput>  bindM(Parser<TTokena, TInput> pa, std::function<Parser<TTokenb, TInput>(TTokena)> f)
+{
+	auto label = "Unknown-bindM";
+	std::function <TResult<TTokenb, TInput>(TInput)> parseFn =
+		[f, pa](TInput input)
+	{
+
+		TResult<TTokena, TInput> ret = pa.parseFn(input);
+
+		TResult<TTokenb, TInput> _result;
+
+		ret.match(
+			[f, &_result](Success<TTokena, TInput> r) {
+					TTokena v = r.value.first;
+					TInput remaining = r.value.second;
+					Parser<TTokenb, TInput> pb = f(v);
+
+					TResult<TTokenb, TInput> result = runOnInput<TTokenb, TInput>(pb, remaining);
+					_result = result;
+				},
+
+
+			[&_result](Error e) { _result = TResult <TTokenb, TInput>(Error(e.label, e.error, e.pos)); }
+		);
+
+		return _result;
+
+	};
+
+	Parser<TTokenb, TInput> pb{ parseFn, label };
+	return pb;
 }
 
 template<typename TToken, typename TInput>
 Parser<TToken, TInput> returnM(TToken v)
 {
-
+	auto label = "unknown-returnM";
 	std::function <TResult<TToken, TInput>(TInput)> fn =
 		[v](TInput input)
 	{
 		return TResult <TToken, TInput>(Success<TToken, TInput>{ std::make_pair(v, input) });
 	};
 
-	Parser<TToken, TInput> pr{ fn };
+	Parser<TToken, TInput> pr{ fn,label };
 
 	return pr;
 }
@@ -237,29 +330,20 @@ Parser<TToken, TInput> returnM(TToken v)
 template <typename TTokena, typename TTokenb, typename TInput>
 Parser<std::pair<TTokena, TTokenb>, TInput>  andThen(Parser<TTokena, TInput> pa, Parser<TTokenb, TInput> pb)
 {
+	std::string label = pa.label + " andThen " + pb.label;
+
 	using TPair = std::pair<TTokena, TTokenb>;
 
-	return bindM<TTokena, TPair, TInput>(pa, [pb](TTokena paResult)->Parser<TPair, TInput>
-	{
-		return bindM<TTokenb, TPair, TInput>(pb, [paResult](TTokenb pbResult) -> Parser<TPair, TInput>
-		{
-			return returnM<std::pair<TTokena, TTokenb>, TInput>(std::make_pair(paResult, pbResult));
-		});
-	});
+	return setLabel(bindM<TTokena, TPair, TInput>(pa, [pb](TTokena paResult)->Parser<TPair, TInput>
+			{
+				return bindM<TTokenb, TPair, TInput>(pb, [paResult](TTokenb pbResult) -> Parser<TPair, TInput>
+				{
+					return returnM<std::pair<TTokena, TTokenb>, TInput>(std::make_pair(paResult, pbResult));
+				});
+			}), label);
 }
 
-template <typename TToken, typename Ti>
-Parser<std::list<TToken>, Ti> many1(Parser<TToken, Ti> p)
-{
-	return bindM<TToken, std::list<TToken>, Ti>(p, [p](TToken pResult)->Parser<std::list<TToken>, Ti>
-	{
-		return bindM<std::list<TToken>, std::list<TToken>, Ti>(many<TToken, Ti>(p), [pResult](std::list<TToken> manyLstResult)->Parser<std::list<TToken>, Ti>
-		{
-			manyLstResult.push_front(pResult);
-			return returnM<std::list<TToken>, Ti>(manyLstResult);
-		});
-	});
-}
+
 
 
 template<typename TFuna, typename TFunb, typename TInput>
@@ -304,6 +388,7 @@ Parser<Tc, Ti> lift2(std::function<Tc(Ta, Tb)> f, Parser<Ta, Ti> xp, Parser<Tb, 
 template <typename TToken, typename TInput>
 Parser<TToken, TInput> orElse(Parser<TToken, TInput> p1, Parser<TToken, TInput> p2)
 {
+	std::string label = p1.label + " orElse " + p2.label;
 	std::function <TResult<TToken, TInput>(TInput)> innerFun = [p1, p2](TInput input)
 	{
 		TResult<TToken, TInput> result = runOnInput<TToken, TInput>(p1, input);
@@ -326,7 +411,7 @@ Parser<TToken, TInput> orElse(Parser<TToken, TInput> p1, Parser<TToken, TInput> 
 		return _result;
 	};
 
-	Parser<TToken, TInput> pr{ innerFun };
+	Parser<TToken, TInput> pr{ innerFun, label };
 
 	return pr;
 }
@@ -344,12 +429,15 @@ Parser<TToken, TInput> choice(std::list <Parser<TToken, TInput>> parserList)
 template <typename TToken, typename TInput>
 Parser<TToken, TInput> anyOf(std::list<char> chlst)
 {
+	std::string cs = "anyOf " + charListToStr(chlst);
+
+
 	using TLstParser = std::list <Parser <char, TInput>>;
 
 	TLstParser lstParser;
 	std::transform(std::begin(chlst), std::end(chlst), std::back_inserter(lstParser), [](char c)->Parser <char, TInput> { return pchar(c); });
 	//lstParser = std::accumulate(chlst.begin(), chlst.end(), lstParser, [](TLstParser lstParser, char c)->TLstParser { lstParser.push_back(pchar(c)); return lstParser; });
-	return choice<char, TInput>(lstParser);
+	return setLabel( choice<char, TInput>(lstParser), cs);
 }
 
 
@@ -393,20 +481,7 @@ Parser<std::list<TItem>, Ti> sequence(std::list<Parser<TItem, Ti>> lstParser)
 }
 
 
-std::list<char> strToCharList(std::string s)
-{
-	std::list<char> lstchar;
-	std::transform(std::begin(s), std::end(s), std::back_inserter(lstchar), [](char c)->char { return c; });
-	return lstchar;
-}
 
-
-std::string charListToStr(std::list<char> cl)
-{
-	std::string s;
-	std::transform(std::begin(cl), std::end(cl), std::back_inserter(s), [](char c)->char { return c; });
-	return s;
-}
 
 template<typename Ti>
 Parser<std::string, Ti> pstring(std::string str)
@@ -465,13 +540,28 @@ TResult<std::list<TItem>, Ti> parserZeroOrMore(Parser<TItem, Ti> parser, Ti inpu
 template<typename TItem, typename Ti>
 Parser<std::list<TItem>, Ti> many(Parser<TItem, Ti> parser)
 {
+	std::string label = "many " ++ parser.label;
 	std::function < TResult<std::list<TItem>, Ti>(Ti)> innerFn = [parser](Ti input)->TResult<std::list<TItem>, Ti>
 	{
 		return parserZeroOrMore(parser, input);
 	};
 
-	Parser<std::list<TItem>, Ti> p{ innerFn };;
+	Parser<std::list<TItem>, Ti> p{ innerFn , label};;
 	return p;
+}
+
+template <typename TToken, typename Ti>
+Parser<std::list<TToken>, Ti> many1(Parser<TToken, Ti> p)
+{
+	std::string label = "many1 " ++parser.label;
+	return setLabel( bindM<TToken, std::list<TToken>, Ti>(p, [p](TToken pResult)->Parser<std::list<TToken>, Ti>
+	{
+		return bindM<std::list<TToken>, std::list<TToken>, Ti>(many<TToken, Ti>(p), [pResult](std::list<TToken> manyLstResult)->Parser<std::list<TToken>, Ti>
+		{
+			manyLstResult.push_front(pResult);
+			return returnM<std::list<TToken>, Ti>(manyLstResult);
+		});
+	}), label);
 }
 
 template<typename Ti>
@@ -630,432 +720,460 @@ Parser<std::list<a>, Ti> sepBy(Parser<a, Ti> p, Parser<b, Ti> sep)
 
 int main()
 {
+
 	{
-		TResult<char, std::string> r1 = runOnInput<char, std::string>(pchar('b'), "baaaa");
-		r1.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << " "; });
+		TResult<char, std::string> r1 = runOnInput<char, std::string>(pchar('b'), "aaaa");
 
+		r1.match(
+			[](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+			[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
+	}
 
+	{
+			using TPairToken = std::pair<char, char>;
+
+			TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(andThen(pchar('a'), pchar('b')), "cdbabb");
+			r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
+				[](Error e) {  std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
+
+	}
+
+	{
 		using TPairToken = std::pair<char, char>;
-		TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(andThen(pchar('a'), pchar('b')), "ababb");
+		TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(setLabel(andThen(pchar('A'), pchar('B')), "AB"), "cdbabb");
 		r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; });
-
-
-		TResult<char, std::string> r3 = runOnInput<char, std::string>(orElse(pchar('a'), pchar('b')), "az");
-		r3.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; });
-
-
-		std::list < Parser<char, std::string> >l = { pchar('a'), pchar('b'), pchar('c') , pchar('z') };
-
-		Parser<char, std::string> ll = choice(l);
-		TResult<char, std::string> r4 = runOnInput<char, std::string>(choice(l), "azz");
-		r4.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; });
-
-
-		Parser<int, std::string> lm = mapM<char, int, std::string>(ll, std::function<int(char)>(toupper));
-		TResult<int, std::string> r5 = runOnInput<int, std::string>(lm, "azz");
-		r5.match([](Success<int, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; });
-
-
-		std::cout << "test anyof" << std::endl;
-		std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
-		Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
-		TResult<char, std::string> r6 = runOnInput<char, std::string>(parseDigit, "1azz");
-		r6.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; });
-
-
-		std::cout << "parse Three Digit" << std::endl;
-		using ThreePair = std::pair < std::pair<char, char>, char>;
-
-		Parser<ThreePair, std::string> parseThreeDigit = andThen(andThen(parseDigit, parseDigit), parseDigit);
-		using ThreePair = std::pair < std::pair<char, char>, char>;
-		TResult<ThreePair, std::string> r7 = runOnInput<ThreePair, std::string>(parseThreeDigit, "123azz");
-		r7.match(
-			[](Success<ThreePair, std::string> r) { std::cout << "(" << "(" << r.value.first.first.first << ", " << r.value.first.first.second << ")" << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; }
-		);
-
-		//test parseThreeDigitAsStr
-		Parser<std::string, std::string> parseThreeDigitAsStr = mapM<ThreePair, std::string, std::string>(parseThreeDigit,
-			[](ThreePair x) -> std::string
-		{
-			std::stringstream s;
-			s << x.first.first << x.first.second << x.second;
-			std::string r = s.str();
-			return r;
-		});
-
-		TResult<std::string, std::string> r8 = runOnInput<std::string, std::string>(parseThreeDigitAsStr, "199876azz");
-		r8.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; });
-
-
-
-
-
-		//test applyM
-		std::function< std::string(ThreePair)> af = [](ThreePair x) -> std::string
-		{
-			std::stringstream s;
-			s << x.first.first << x.first.second << x.second;
-			std::string r = s.str();
-			return r;
-		};
-		using TFUN = std::function< std::string(ThreePair)>;
-		Parser<std::string, std::string> ap = applyM<ThreePair, std::string>(returnM<TFUN, std::string>(af), parseThreeDigit);
-
-		TResult<std::string, std::string> r9 = runOnInput<std::string, std::string>(ap, "199876azz");
-		r9.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; });
-
-
-
-
-		//test lift2
-		std::function< std::string(char a, char b)> al = [](char a, char b) -> std::string
-		{
-			std::stringstream s;
-			s << a << b;
-			std::string r = s.str();
-			return r;
-		};
-		Parser<std::string, std::string> pParse2char2string = lift2<char, char, std::string>(al, pchar('n'), pchar('b'));
-
-		TResult<std::string, std::string> r10 = runOnInput<std::string, std::string>(pParse2char2string, "nbgaxbzz");
-		r10.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; });
-
-	}
-
-
-
-	{
-		std::cout << "sequence" << std::endl;
-		std::list<Parser<char, std::string>> parsers = std::list<Parser<char, std::string>>{ pchar('a'), pchar('b'), pchar('c') };
-
-		Parser<std::list<char>, std::string> combined = sequence<char, std::string>(parsers);
-
-
-		TResult<std::list<char>, std::string> r11 = runOnInput<std::list<char>, std::string>(combined, "abc1azz");
-		r11.match(
-
-			[](Success<std::list<char>, std::string> r) { std::cout << "(";
-
-		std::cout << "(";
-		std::transform(r.value.first.begin(), r.value.first.end(), r.value.first.begin(),
-			[](char c) -> char {  std::cout << c << " "; return c; });
-		std::cout << ")";
-
-		std::cout << ", " << r.value.second << ")" << std::endl; },
-
-			[](Error e) { std::cout << e.error << std::endl; });
+			[](Error e) {  std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 	}
 
 
 
 
+	//{
+	//	TResult<char, std::string> r1 = runOnInput<char, std::string>(pchar('b'), "baaaa");
+	//	r1.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
 
-	{
-		std::cout << "test pstring" << std::endl;
+	//	using TPairToken = std::pair<char, char>;
+	//	TResult<TPairToken, std::string> r2 = runOnInput<TPairToken, std::string>(andThen(pchar('a'), pchar('b')), "ababb");
+	//	r2.match([](Success<TPairToken, std::string> r) { std::cout << "(" << r.value.first.first << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
-		TResult< std::string, std::string> ret = runOnInput< std::string, std::string>(pstring<std::string>("ABC"), "AB|DE");
-		ret.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; });
-	}
 
+	//	TResult<char, std::string> r3 = runOnInput<char, std::string>(orElse(pchar('a'), pchar('b')), "az");
+	//	r3.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
 
-	{
-		std::cout << "test many" << std::endl;
+	//	std::list < Parser<char, std::string> >l = { pchar('a'), pchar('b'), pchar('c') , pchar('z') };
 
-		auto manyA = many(pchar('A'));
-		TResult< std::list<char>, std::string> ret = runOnInput< std::list<char>, std::string>(manyA, "AAAAD");
-		ret.match(
-			[](Success<std::list<char>, std::string> r) { std::cout << "(";
+	//	Parser<char, std::string> ll = choice(l);
+	//	TResult<char, std::string> r4 = runOnInput<char, std::string>(choice(l), "azz");
+	//	r4.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
-		std::ostream_iterator<char> out_it(std::cout, " ");
-		//std:copy(r.value.first.begin(), r.value.first.end(), out_it);
-		std::transform(r.value.first.begin(), r.value.first.end(), out_it, [](char c)->char {   return c; });
 
-		std::cout << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << " "; });
-	}
+	//	Parser<int, std::string> lm = mapM<char, int, std::string>(ll, std::function<int(char)>(toupper));
+	//	TResult<int, std::string> r5 = runOnInput<int, std::string>(lm, "azz");
+	//	r5.match([](Success<int, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
 
+	//	std::cout << "test anyof" << std::endl;
+	//	std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+	//	Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
+	//	TResult<char, std::string> r6 = runOnInput<char, std::string>(parseDigit, "1azz");
+	//	r6.match([](Success<char, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
-	{
-		std::cout << "test manyAb" << std::endl;
 
-		auto manyAb = many<std::string, std::string>(pstring<std::string>("AB"));
-		TResult< std::list<std::string>, std::string> ret = runOnInput< std::list<std::string>, std::string>(manyAb, "ABABAAAD");
-		ret.match(
-			[](Success<std::list<std::string>, std::string> r) { std::cout << "(";
+	//	std::cout << "parse Three Digit" << std::endl;
+	//	using ThreePair = std::pair < std::pair<char, char>, char>;
 
-		std::ostream_iterator<std::string> out_it(std::cout, " ");
-		std::transform(r.value.first.begin(), r.value.first.end(), out_it, [](std::string c)->std::string {   return c; });
+	//	Parser<ThreePair, std::string> parseThreeDigit = andThen(andThen(parseDigit, parseDigit), parseDigit);
+	//	using ThreePair = std::pair < std::pair<char, char>, char>;
+	//	TResult<ThreePair, std::string> r7 = runOnInput<ThreePair, std::string>(parseThreeDigit, "123azz");
+	//	r7.match(
+	//		[](Success<ThreePair, std::string> r) { std::cout << "(" << "(" << r.value.first.first.first << ", " << r.value.first.first.second << ")" << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; }
+	//	);
 
-		std::cout << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << " "; });
+	//	//test parseThreeDigitAsStr
+	//	Parser<std::string, std::string> parseThreeDigitAsStr = mapM<ThreePair, std::string, std::string>(parseThreeDigit,
+	//		[](ThreePair x) -> std::string
+	//	{
+	//		std::stringstream s;
+	//		s << x.first.first << x.first.second << x.second;
+	//		std::string r = s.str();
+	//		return r;
+	//	});
 
-	}
+	//	TResult<std::string, std::string> r8 = runOnInput<std::string, std::string>(parseThreeDigitAsStr, "199876azz");
+	//	r8.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
 
 
-	{
-		std::cout << "test whitespace" << std::endl;
 
-		Parser<std::list<char>, std::string> wts = whitespace< std::string>();
-		TResult< std::list<char>, std::string> ret = runOnInput< std::list<char>, std::string>(wts, " a \t \n asdfaa");
-		ret.match(
-			[](Success<std::list<char>, std::string> r) { std::cout << "(";
 
-		std::ostream_iterator<std::string> out_it(std::cout, " ");
-		std::transform(r.value.first.begin(), r.value.first.end(), out_it, [](char c)->std::string {   return getPrintable(c); });
+	//	//test applyM
+	//	std::function< std::string(ThreePair)> af = [](ThreePair x) -> std::string
+	//	{
+	//		std::stringstream s;
+	//		s << x.first.first << x.first.second << x.second;
+	//		std::string r = s.str();
+	//		return r;
+	//	};
+	//	using TFUN = std::function< std::string(ThreePair)>;
+	//	Parser<std::string, std::string> ap = applyM<ThreePair, std::string>(returnM<TFUN, std::string>(af), parseThreeDigit);
 
-		std::cout << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << " "; });
+	//	TResult<std::string, std::string> r9 = runOnInput<std::string, std::string>(ap, "199876azz");
+	//	r9.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
-	}
 
-	{
 
-		std::cout << "test whitespace" << std::endl;
 
-		std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
-		Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
-		using TDigList = std::list<char>;
-		Parser<TDigList, std::string> digits = many1<char, std::string>(parseDigit);
+	//	//test lift2
+	//	std::function< std::string(char a, char b)> al = [](char a, char b) -> std::string
+	//	{
+	//		std::stringstream s;
+	//		s << a << b;
+	//		std::string r = s.str();
+	//		return r;
+	//	};
+	//	Parser<std::string, std::string> pParse2char2string = lift2<char, char, std::string>(al, pchar('n'), pchar('b'));
 
-		TResult<TDigList, std::string> ret = runOnInput<TDigList, std::string>(digits, "azz");
-		ret.match(
-			[](Success<TDigList, std::string> r) { std::cout << "(";
+	//	TResult<std::string, std::string> r10 = runOnInput<std::string, std::string>(pParse2char2string, "nbgaxbzz");
+	//	r10.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
-		std::ostream_iterator<char> out_it(std::cout, " ");
-		std::copy(r.value.first.begin(), r.value.first.end(), out_it);
+	//}
 
 
-		std::cout << ", " << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; }
-		);
 
-	}
+	//{
+	//	std::cout << "sequence" << std::endl;
+	//	std::list<Parser<char, std::string>> parsers = std::list<Parser<char, std::string>>{ pchar('a'), pchar('b'), pchar('c') };
 
+	//	Parser<std::list<char>, std::string> combined = sequence<char, std::string>(parsers);
 
-	{
-		std::cout << "test opt parser" << std::endl;
-		std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
-		Parser<char, std::string> digit = anyOf<char, std::string>(lstDigit);
 
-		using  TCharMaybeChar = std::pair<char, Maybe<char>>;
-		Parser<std::pair<char, Maybe<char>>, std::string> digitThenSemicolon = andThen<char, Maybe<char>>(
-			digit, opt<char, std::string>(pchar('a'))
-			);
+	//	TResult<std::list<char>, std::string> r11 = runOnInput<std::list<char>, std::string>(combined, "abc1azz");
+	//	r11.match(
 
-		TResult<TCharMaybeChar, std::string> ret = runOnInput<TCharMaybeChar, std::string>(digitThenSemicolon, "1ada--zz");
+	//		[](Success<std::list<char>, std::string> r) { std::cout << "(";
 
+	//	std::cout << "(";
+	//	std::transform(r.value.first.begin(), r.value.first.end(), r.value.first.begin(),
+	//		[](char c) -> char {  std::cout << c << " "; return c; });
+	//	std::cout << ")";
 
-		ret.match(
-			[](Success<TCharMaybeChar, std::string> r)
-		{
-			std::cout << "("; std::cout << r.value.first.first << " ";
+	//	std::cout << ", " << r.value.second << ")" << std::endl; },
 
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
+	//}
 
-			Maybe<char> mc = r.value.first.second;
-			r.value.first.second.match(
-				[](TNothing<char> r) {std::cout << "Nothing"; },
-				[](TSome<char> r) {std::cout << "Some " << r.v; }
 
-			);
 
 
-			std::cout << ", " << r.value.second << ")" << std::endl;
-		},
-			[](Error e) { std::cout << e.error << std::endl; }
-		);
-	}
 
 
+	//{
+	//	std::cout << "test pstring" << std::endl;
 
-	{
-		std::cout << "test pint parser" << std::endl;
+	//	TResult< std::string, std::string> ret = runOnInput< std::string, std::string>(pstring<std::string>("ABC"), "AB|DE");
+	//	ret.match([](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
+	//}
 
-		TResult<int, std::string> ret = runOnInput<int, std::string>(pint<std::string>(), "-2ada--zz");
 
-		ret.match(
-			[](Success<int, std::string> r) { std::cout << r.value.first << " " << r.value.second << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; }
-		);
-	}
 
+	//{
+	//	std::cout << "test many" << std::endl;
 
-	{
-		std::cout << "test throw right" << std::endl;
+	//	auto manyA = many(pchar('A'));
+	//	TResult< std::list<char>, std::string> ret = runOnInput< std::list<char>, std::string>(manyA, "AAAAD");
+	//	ret.match(
+	//		[](Success<std::list<char>, std::string> r) { std::cout << "(";
 
-		std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
-		Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
-			
-		Parser<char, std::string> digitThenSemicolon = throwRight<char, Maybe<char>, std::string>(parseDigit, opt<char, std::string>(pchar(';')));
+	//	std::ostream_iterator<char> out_it(std::cout, " ");
+	//	//std:copy(r.value.first.begin(), r.value.first.end(), out_it);
+	//	std::transform(r.value.first.begin(), r.value.first.end(), out_it, [](char c)->char {   return c; });
 
-		TResult<char, std::string> ret = runOnInput<char, std::string>(digitThenSemicolon, "2;ada--zz");
-		ret.match(
-			[](Success<char, std::string> r) { std::cout<<"(" << r.value.first << " ," << r.value.second <<")"<< std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; }
-		);
-	}
+	//	std::cout << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
+	//}
 
 
 
-	{
-		std::cout << "test throw left" << std::endl;
+	//{
+	//	std::cout << "test manyAb" << std::endl;
 
-		std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
-		Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
+	//	auto manyAb = many<std::string, std::string>(pstring<std::string>("AB"));
+	//	TResult< std::list<std::string>, std::string> ret = runOnInput< std::list<std::string>, std::string>(manyAb, "ABABAAAD");
+	//	ret.match(
+	//		[](Success<std::list<std::string>, std::string> r) { std::cout << "(";
 
-		Parser<char, std::string> digitThenSemicolon = throwLeft< Maybe<char>, char, std::string>( opt<char, std::string>(pchar(';')), parseDigit);
+	//	std::ostream_iterator<std::string> out_it(std::cout, " ");
+	//	std::transform(r.value.first.begin(), r.value.first.end(), out_it, [](std::string c)->std::string {   return c; });
 
-		TResult<char, std::string> ret = runOnInput<char, std::string>(digitThenSemicolon, ";2;ada--zz");
-		ret.match(
-			[](Success<char, std::string> r) { std::cout << "(" << r.value.first << " ," << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << std::endl; }
-		);
-	}
+	//	std::cout << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
+	//}
 
 
 
-	{
-		std::cout << "test ab \\t \\ncd -> (ab,cd), \"\"" << std::endl;
+	//{
+	//	std::cout << "test whitespace" << std::endl;
 
-		Parser<std::list<char>, std::string> whitesps1= whitespace1<std::string>();
+	//	Parser<std::list<char>, std::string> wts = whitespace< std::string>();
+	//	TResult< std::list<char>, std::string> ret = runOnInput< std::list<char>, std::string>(wts, " a \t \n asdfaa");
+	//	ret.match(
+	//		[](Success<std::list<char>, std::string> r) { std::cout << "(";
 
-		Parser<std::string, std::string> pab = pstring< std::string>("AB");
-		Parser<std::string, std::string> pcd = pstring< std::string>("CD");
+	//	std::ostream_iterator<std::string> out_it(std::cout, " ");
+	//	std::transform(r.value.first.begin(), r.value.first.end(), out_it, [](char c)->std::string {   return getPrintable(c); });
 
-		
-		Parser<std::string, std::string> p1 = throwRight<std::string, std::list<char>, std::string>(pab, whitesps1);
+	//	std::cout << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout<< "Error parsing " << e.label << std::endl << e.error << std::endl; });
 
-		using TStringPair = std::pair<std::string, std::string>;
-		Parser< TStringPair, std::string> pab_cd = andThen<std::string, std::string>(p1, pcd);
+	//}
 
+	//{
 
-		TResult< TStringPair, std::string> ret = runOnInput<TStringPair, std::string>(pab_cd, "AB \t\n CD-d");
-		ret.match(
-			[](Success<TStringPair, std::string> r) { std::cout << "((" << r.value.first.first <<", " << r.value.first.second <<") ," << r.value.second << ")" << std::endl; },
-			[](Error e) { std::cout << e.error << " "; });
+	//	std::cout << "test whitespace" << std::endl;
 
+	//	std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+	//	Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
+	//	using TDigList = std::list<char>;
+	//	Parser<TDigList, std::string> digits = many1<char, std::string>(parseDigit);
 
-	}
+	//	TResult<TDigList, std::string> ret = runOnInput<TDigList, std::string>(digits, "azz");
+	//	ret.match(
+	//		[](Success<TDigList, std::string> r) { std::cout << "(";
 
+	//	std::ostream_iterator<char> out_it(std::cout, " ");
+	//	std::copy(r.value.first.begin(), r.value.first.end(), out_it);
 
 
-	{
-		{
-			std::cout << "test between." << std::endl;
+	//	std::cout << ", " << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; }
+	//	);
 
-			Parser<char, std::string> pdoublequote = pchar('"');
+	//}
 
-			Parser<int, std::string> quotedInteger = between<char, int, char, std::string>(pdoublequote, pint<std::string>(), pdoublequote);
 
-			TResult< int, std::string> ret = runOnInput<int, std::string>(quotedInteger, "\"213\"AB \t\"\n CD-d");
-			ret.match(
-				[](Success<int, std::string> r) { std::cout << "(" << r.value.first <<"," << r.value.second << ")" << std::endl; },
-				[](Error e) { std::cout << e.error << " "<<std::endl; });
-		}
-		{
+	//{
+	//	std::cout << "test opt parser" << std::endl;
+	//	std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+	//	Parser<char, std::string> digit = anyOf<char, std::string>(lstDigit);
 
-			std::cout << "test between2." << std::endl;
-			Parser<std::list<char>, std::string> whitesps = whitespace<std::string>();
+	//	using  TCharMaybeChar = std::pair<char, Maybe<char>>;
+	//	Parser<std::pair<char, Maybe<char>>, std::string> digitThenSemicolon = andThen<char, Maybe<char>>(
+	//		digit, opt<char, std::string>(pchar('a'))
+	//		);
 
+	//	TResult<TCharMaybeChar, std::string> ret = runOnInput<TCharMaybeChar, std::string>(digitThenSemicolon, "1ada--zz");
 
-			Parser<std::string, std::string> parseABC = pstring<std::string>("ABC");
-			Parser<std::string, std::string> parse_ABC_ = ignoreWhitespaceAround< std::list<char>, std::string, std::list<char>>(whitesps, parseABC, whitesps);
 
-			TResult< std::string, std::string> ret = runOnInput<std::string, std::string>(parseABC, " ABC");
-			ret.match(
-				[](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << "," << r.value.second << ")" << std::endl; },
-				[](Error e) { std::cout << e.error << " " << std::endl; });
-		
+	//	ret.match(
+	//		[](Success<TCharMaybeChar, std::string> r)
+	//	{
+	//		std::cout << "("; std::cout << r.value.first.first << " ";
 
-		}
 
-		{
+	//		Maybe<char> mc = r.value.first.second;
+	//		r.value.first.second.match(
+	//			[](TNothing<char> r) {std::cout << "Nothing"; },
+	//			[](TSome<char> r) {std::cout << "Some " << r.v; }
 
-			std::cout << "test between3." << std::endl;
-			Parser<std::list<char>, std::string> whitesps = whitespace<std::string>();
+	//		);
 
 
-			Parser<std::string, std::string> parseABC = pstring<std::string>("ABC");
-			Parser<std::string, std::string> parse_ABC_ = ignoreWhitespaceAround< std::list<char>, std::string, std::list<char>>(whitesps, parseABC, whitesps);
+	//		std::cout << ", " << r.value.second << ")" << std::endl;
+	//	},
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; }
+	//	);
+	//}
 
-			TResult< std::string, std::string> ret = runOnInput<std::string, std::string>(parse_ABC_, " ABC  \n\t ad");
-			ret.match(
-				[](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << "," << r.value.second << ")" << std::endl; },
-				[](Error e) { std::cout << e.error << " "; });
 
 
-		}
+	//{
+	//	std::cout << "test pint parser" << std::endl;
 
-	}
+	//	TResult<int, std::string> ret = runOnInput<int, std::string>(pint<std::string>(), "-2ada--zz");
 
+	//	ret.match(
+	//		[](Success<int, std::string> r) { std::cout << r.value.first << " " << r.value.second << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; }
+	//	);
+	//}
 
-	{
-		std::cout << "test sep sep1" << std::endl;
 
-		Parser<char, std::string>comma = pchar(',');
+	//{
+	//	std::cout << "test throw right" << std::endl;
 
-		std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
-		Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
+	//	std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+	//	Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
+	//		
+	//	Parser<char, std::string> digitThenSemicolon = throwRight<char, Maybe<char>, std::string>(parseDigit, opt<char, std::string>(pchar(';')));
 
+	//	TResult<char, std::string> ret = runOnInput<char, std::string>(digitThenSemicolon, "2;ada--zz");
+	//	ret.match(
+	//		[](Success<char, std::string> r) { std::cout<<"(" << r.value.first << " ," << r.value.second <<")"<< std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; }
+	//	);
+	//}
 
-		Parser<std::list<char>, std::string> zeroOrMoreDigitList = sepBy<char, char, std::string>(parseDigit, comma);
 
-		Parser<std::list<char>, std::string> oneOrMoreDigitList = sepBy1<char, char, std::string>(parseDigit, comma);
 
+	//{
+	//	std::cout << "test throw left" << std::endl;
 
-		std::list<std::string> testStrs = { "1;", "1,2;", "1,2,3;", "Z;" };
+	//	std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+	//	Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
 
-		for_each(testStrs.begin(), testStrs.end(), [zeroOrMoreDigitList, oneOrMoreDigitList](std::string s)
-		{
-			{
-				std::cout << "zeroOrMoreDigitList:" << std::endl;
-				TResult< std::list<char>, std::string> ret = runOnInput<std::list<char>, std::string>(zeroOrMoreDigitList, s);
-				ret.match(
-					[](Success<std::list<char>, std::string> r) { std::cout << "(";
-				std::ostream_iterator<char> out_it(std::cout, " ");
-				std::copy(r.value.first.begin(), r.value.first.end(), out_it);
-				std::cout << "," << r.value.second << ")" << std::endl; },
-					[](Error e) { std::cout << e.error << " "; });
-			}
-			{
-				std::cout << "oneOrMoreDigitList:" << std::endl;
-				TResult< std::list<char>, std::string> ret = runOnInput<std::list<char>, std::string>(oneOrMoreDigitList, s);
-				ret.match(
-					[](Success<std::list<char>, std::string> r) { std::cout << "(";
-				std::ostream_iterator<char> out_it(std::cout, " ");
-				std::copy(r.value.first.begin(), r.value.first.end(), out_it);
-				std::cout << "," << r.value.second << ")" << std::endl; },
-					[](Error e) { std::cout << e.error << " "; });
-			}
+	//	Parser<char, std::string> digitThenSemicolon = throwLeft< Maybe<char>, char, std::string>( opt<char, std::string>(pchar(';')), parseDigit);
 
+	//	TResult<char, std::string> ret = runOnInput<char, std::string>(digitThenSemicolon, ";2;ada--zz");
+	//	ret.match(
+	//		[](Success<char, std::string> r) { std::cout << "(" << r.value.first << " ," << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; }
+	//	);
+	//}
 
 
 
 
+	//{
+	//	std::cout << "test ab \\t \\ncd -> (ab,cd), \"\"" << std::endl;
 
-			//std::cout << s << std::endl; 
-		});
+	//	Parser<std::list<char>, std::string> whitesps1= whitespace1<std::string>();
 
+	//	Parser<std::string, std::string> pab = pstring< std::string>("AB");
+	//	Parser<std::string, std::string> pcd = pstring< std::string>("CD");
 
-		
+	//	
+	//	Parser<std::string, std::string> p1 = throwRight<std::string, std::list<char>, std::string>(pab, whitesps1);
 
+	//	using TStringPair = std::pair<std::string, std::string>;
+	//	Parser< TStringPair, std::string> pab_cd = andThen<std::string, std::string>(p1, pcd);
 
-	}
+
+	//	TResult< TStringPair, std::string> ret = runOnInput<TStringPair, std::string>(pab_cd, "AB \t\n CD-d");
+	//	ret.match(
+	//		[](Success<TStringPair, std::string> r) { std::cout << "((" << r.value.first.first <<", " << r.value.first.second <<") ," << r.value.second << ")" << std::endl; },
+	//		[](Error e) { std::cout << e.error << " "; });
+
+
+	//}
+
+
+
+	//{
+	//	{
+	//		std::cout << "test between." << std::endl;
+
+	//		Parser<char, std::string> pdoublequote = pchar('"');
+
+	//		Parser<int, std::string> quotedInteger = between<char, int, char, std::string>(pdoublequote, pint<std::string>(), pdoublequote);
+
+	//		TResult< int, std::string> ret = runOnInput<int, std::string>(quotedInteger, "\"213\"AB \t\"\n CD-d");
+	//		ret.match(
+	//			[](Success<int, std::string> r) { std::cout << "(" << r.value.first <<"," << r.value.second << ")" << std::endl; },
+	//			[](Error e) { std::cout << e.error << " "<<std::endl; });
+	//	}
+	//	{
+
+	//		std::cout << "test between2." << std::endl;
+	//		Parser<std::list<char>, std::string> whitesps = whitespace<std::string>();
+
+
+	//		Parser<std::string, std::string> parseABC = pstring<std::string>("ABC");
+	//		Parser<std::string, std::string> parse_ABC_ = ignoreWhitespaceAround< std::list<char>, std::string, std::list<char>>(whitesps, parseABC, whitesps);
+
+	//		TResult< std::string, std::string> ret = runOnInput<std::string, std::string>(parseABC, " ABC");
+	//		ret.match(
+	//			[](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << "," << r.value.second << ")" << std::endl; },
+	//			[](Error e) { std::cout << e.error << " " << std::endl; });
+	//	
+
+	//	}
+
+	//	{
+
+	//		std::cout << "test between3." << std::endl;
+	//		Parser<std::list<char>, std::string> whitesps = whitespace<std::string>();
+
+
+	//		Parser<std::string, std::string> parseABC = pstring<std::string>("ABC");
+	//		Parser<std::string, std::string> parse_ABC_ = ignoreWhitespaceAround< std::list<char>, std::string, std::list<char>>(whitesps, parseABC, whitesps);
+
+	//		TResult< std::string, std::string> ret = runOnInput<std::string, std::string>(parse_ABC_, " ABC  \n\t ad");
+	//		ret.match(
+	//			[](Success<std::string, std::string> r) { std::cout << "(" << r.value.first << "," << r.value.second << ")" << std::endl; },
+	//			[](Error e) { std::cout << e.error << " "; });
+
+
+	//	}
+
+	//}
+
+
+	//{
+	//	std::cout << "test sep sep1" << std::endl;
+
+	//	Parser<char, std::string>comma = pchar(',');
+
+	//	std::list<char> lstDigit = { '0', '1' , '2' , '3' , '4' , '5' , '6' , '7' , '8' , '9' };
+	//	Parser<char, std::string> parseDigit = anyOf<char, std::string>(lstDigit);
+
+
+	//	Parser<std::list<char>, std::string> zeroOrMoreDigitList = sepBy<char, char, std::string>(parseDigit, comma);
+
+	//	Parser<std::list<char>, std::string> oneOrMoreDigitList = sepBy1<char, char, std::string>(parseDigit, comma);
+
+
+	//	std::list<std::string> testStrs = { "1;", "1,2;", "1,2,3;", "Z;" };
+
+	//	for_each(testStrs.begin(), testStrs.end(), [zeroOrMoreDigitList, oneOrMoreDigitList](std::string s)
+	//	{
+	//		{
+	//			std::cout << "zeroOrMoreDigitList:" << std::endl;
+	//			TResult< std::list<char>, std::string> ret = runOnInput<std::list<char>, std::string>(zeroOrMoreDigitList, s);
+	//			ret.match(
+	//				[](Success<std::list<char>, std::string> r) { std::cout << "(";
+	//			std::ostream_iterator<char> out_it(std::cout, " ");
+	//			std::copy(r.value.first.begin(), r.value.first.end(), out_it);
+	//			std::cout << "," << r.value.second << ")" << std::endl; },
+	//				[](Error e) { std::cout << e.error << " "; });
+	//		}
+	//		{
+	//			std::cout << "oneOrMoreDigitList:" << std::endl;
+	//			TResult< std::list<char>, std::string> ret = runOnInput<std::list<char>, std::string>(oneOrMoreDigitList, s);
+	//			ret.match(
+	//				[](Success<std::list<char>, std::string> r) { std::cout << "(";
+	//			std::ostream_iterator<char> out_it(std::cout, " ");
+	//			std::copy(r.value.first.begin(), r.value.first.end(), out_it);
+	//			std::cout << "," << r.value.second << ")" << std::endl; },
+	//				[](Error e) { std::cout << e.error << " "; });
+	//		}
+
+
+
+
+
+
+	//		//std::cout << s << std::endl; 
+	//	});
+
+
+	//	
+
+
+	//}
 
 
 
