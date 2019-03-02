@@ -245,6 +245,32 @@ Parser<char, std::string> satisfy(std::function<bool(char)> predicate, ParserLab
 
 }
 
+
+
+
+Parser<char, std::string> parseChar(char charToMatch)
+{
+	auto pred = [charToMatch](char ch) -> bool { return charToMatch == ch; };
+
+	return satisfy(pred, ParserLabel{ std::string(1, charToMatch) });
+}
+
+Parser<char, std::string> parseDigit()
+{
+	auto pred = [](char charToMatch) -> bool { return isdigit(charToMatch); };
+
+	return satisfy(pred, ParserLabel{ "digit" });
+}
+
+Parser<char, std::string> parseSpace()
+{
+	auto pred = [](char charToMatch) -> bool {return isspace(charToMatch); };
+
+	return satisfy(pred, ParserLabel{ "space" });
+}
+
+
+
 template<typename Tt, typename Ti>
 std::string getLabel(Parser<Tt, Ti> p)
 {
@@ -756,6 +782,21 @@ std::function<Keyword()> FOR = []()->Keyword
 
 int main()
 {
+
+	{
+		//using TPairToken = std::pair<char, char>;
+		using ThreePair = std::pair< std::pair < std::pair<char, char>, char>, char>;
+		auto top = andThen(andThen(andThen(parseChar('a'), parseChar('b')), parseChar('c')), parseChar('d'));
+
+		TResult<ThreePair, std::string> r2 = runOnInput<ThreePair, std::string>(top, "abczdbddbabb");
+		r2.match(
+			[](Success<ThreePair, std::string> r) { std::cout << "(" /*<< r.value.first.first*/ << ", " << r.value.first.second << ")" << ", " << r.value.second << ")" << std::endl; },
+			[](Error e) { std::cout << "Error parsing " << e.label << std::endl << e.error << std::endl; }
+		);
+
+	}
+
+
 
 	//{
 	//	TResult<char, std::string> r1 = runOnInput<char, std::string>(pchar('b'), "aaaa");
