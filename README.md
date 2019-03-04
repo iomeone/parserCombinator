@@ -1,8 +1,7 @@
-# parserCombinator
-Parser Combinators in c++  (Understanding Parser Combinators c++ implemention)
+#Parser Combinators in c++ 
 
 
-Implement Parser Combinators according blog as  https://fsharpforfunandprofit.com/posts/understanding-parser-combinators/
+##Implement Parser Combinators according blog as  https://fsharpforfunandprofit.com/posts/understanding-parser-combinators/
 
 Not finished and will not update anymore, becasue I am borther and found https://github.com/ollef/Earley is really instresing! 
 
