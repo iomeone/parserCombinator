@@ -1,0 +1,8 @@
+# parserCombinator
+Parser Combinators in c++  (Understanding Parser Combinators c++ implemention)
+
+
+Implement Parser Combinators according blog as  https://fsharpforfunandprofit.com/posts/understanding-parser-combinators/
+not finished , becasue I am borther and found https://github.com/ollef/Earley is really instresing! 
+
+Current state is to add position and context to error messages, any pull requests are welcome!
