@@ -5,7 +5,7 @@
 
 Not finished and will not update anymore, becasue I am borther .
 
-Current state is to add position and context to error messages, any pull requests are welcome! 
+Current state is to add json parser(chapter 4), any pull requests are welcome! 
 Build using visual studio 2017.
 
 Next big thing to implement is to support recursive variant , (the data type is support by mapbox), and can  recursively parse  recursive data structure (like lisp, json etc).
