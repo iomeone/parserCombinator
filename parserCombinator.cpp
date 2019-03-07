@@ -1,4 +1,4 @@
-//coded by zhu fei (jellyzone@gmail.com), all rights reseverd
+//coded by zhu fei , MIT licence
 
 #include <iostream>
 #include <sstream>
